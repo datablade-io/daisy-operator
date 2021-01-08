@@ -13,4 +13,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: registry.foundary.zone:8360/dae/daisy-operator
-  newTag: v0.3
+  newTag: v0.1

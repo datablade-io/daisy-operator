@@ -5,6 +5,8 @@ metadata:
 spec:
   pvReclaimPolicy: Retain
   configuration:
+    settings:
+      listen_host: "0.0.0.0"
     clusters:
       cluster:
         name: cluster

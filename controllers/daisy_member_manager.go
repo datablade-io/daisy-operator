@@ -210,13 +210,14 @@ func (m *DaisyMemberManager) deleteDaisyInstallation(di *v1.DaisyInstallation) e
 		if err := m.deps.Client.Update(context.Background(), di); err != nil {
 			return err
 		}
+
+		di.Status.State = v1.StatusCompleted
+		if err := m.deps.Client.Status().Update(context.Background(), di); err != nil {
+			log.Error(err, "Fail to update status")
+			return err
+		}
 	}
 
-	di.Status.State = v1.StatusCompleted
-	if err := m.deps.Client.Status().Update(context.Background(), di); err != nil {
-		log.Error(err, "Fail to update status")
-		return err
-	}
 	return nil
 }
 
@@ -804,26 +805,28 @@ func (m *DaisyMemberManager) deleteShard(ctx *memberContext, di *v1.DaisyInstall
 	ctx.CurShard = shard.Name
 	log := m.deps.Log.WithValues("Shard", shard.Name)
 
-	clusterStatus := di.Status.Clusters[ctx.CurCluster]
-	if clusterStatus.Shards == nil {
-		clusterStatus.Shards = make(map[string]v1.ShardStatus)
-	}
-
-	newStatus := v1.ShardStatus{
-		Name:     shard.Name,
-		Phase:    v1.ScalePhase,
-		Replicas: map[string]v1.ReplicaStatus{},
-	}
-
-	if _, ok := clusterStatus.Shards[shard.Name]; ok {
-		newStatus = clusterStatus.Shards[shard.Name]
-		if len(newStatus.Replicas) != shard.ReplicaCount {
-			newStatus.Phase = v1.ScalePhase
+	clusterStatus, ok := di.Status.Clusters[ctx.CurCluster]
+	if ok {
+		if clusterStatus.Shards == nil {
+			clusterStatus.Shards = make(map[string]v1.ShardStatus)
 		}
-	}
-	clusterStatus.Shards[shard.Name] = newStatus
 
-	di.Status.Clusters[ctx.CurCluster] = clusterStatus
+		newStatus := v1.ShardStatus{
+			Name:     shard.Name,
+			Phase:    v1.ScalePhase,
+			Replicas: map[string]v1.ReplicaStatus{},
+		}
+
+		if _, ok := clusterStatus.Shards[shard.Name]; ok {
+			newStatus = clusterStatus.Shards[shard.Name]
+			if len(newStatus.Replicas) != shard.ReplicaCount {
+				newStatus.Phase = v1.ScalePhase
+			}
+		}
+		clusterStatus.Shards[shard.Name] = newStatus
+
+		di.Status.Clusters[ctx.CurCluster] = clusterStatus
+	}
 
 	for name, replica := range shard.Replicas {
 		if err := m.deleteReplica(ctx, di, &replica); err != nil {
