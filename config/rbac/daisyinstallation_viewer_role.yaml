@@ -1,0 +1,20 @@
+# permissions for end users to view daisyinstallations.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: daisyinstallation-viewer-role
+rules:
+- apiGroups:
+  - daisy.com.daisy.com
+  resources:
+  - daisyinstallations
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - daisy.com.daisy.com
+  resources:
+  - daisyinstallations/status
+  verbs:
+  - get

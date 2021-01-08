@@ -1,0 +1,18 @@
+domain: daisy.com
+layout: go.kubebuilder.io/v3
+projectName: daisy-operator
+repo: github.com/daisy/daisy-operator
+resources:
+- crdVersion: v1
+  group: daisy.com
+  kind: DaisyInstallation
+  version: v1
+  webhookVersion: v1
+- crdVersion: v1
+  group: daisy.com
+  kind: DaisyOperatorConfiguration
+  version: v1
+version: 3-alpha
+plugins:
+  manifests.sdk.operatorframework.io/v2: {}
+  scorecard.sdk.operatorframework.io/v2: {}

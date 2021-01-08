@@ -1,0 +1,24 @@
+# permissions for end users to edit daisyinstallations.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: daisyinstallation-editor-role
+rules:
+- apiGroups:
+  - daisy.com.daisy.com
+  resources:
+  - daisyinstallations
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - daisy.com.daisy.com
+  resources:
+  - daisyinstallations/status
+  verbs:
+  - get

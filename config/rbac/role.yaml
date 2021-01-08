@@ -1,0 +1,85 @@
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - daisy.com
+  resources:
+  - daisyinstallations
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - daisy.com
+  resources:
+  - daisyinstallations/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - daisy.com
+  resources:
+  - daisyinstallations/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - daisy.com
+  resources:
+  - daisyoperatorconfigurations
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - daisy.com
+  resources:
+  - daisyoperatorconfigurations/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - daisy.com
+  resources:
+  - daisyoperatorconfigurations/status
+  verbs:
+  - get
+  - patch
+  - update

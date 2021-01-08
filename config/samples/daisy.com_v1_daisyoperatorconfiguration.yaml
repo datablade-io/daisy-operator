@@ -1,0 +1,7 @@
+apiVersion: daisy.com/v1
+kind: DaisyOperatorConfiguration
+metadata:
+  name: daisyoperatorconfiguration-sample
+spec:
+  # Add fields here
+  foo: bar

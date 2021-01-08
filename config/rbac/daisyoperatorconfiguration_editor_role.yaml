@@ -1,0 +1,24 @@
+# permissions for end users to edit daisyoperatorconfigurations.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: daisyoperatorconfiguration-editor-role
+rules:
+- apiGroups:
+  - daisy.com.daisy.com
+  resources:
+  - daisyoperatorconfigurations
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - daisy.com.daisy.com
+  resources:
+  - daisyoperatorconfigurations/status
+  verbs:
+  - get
