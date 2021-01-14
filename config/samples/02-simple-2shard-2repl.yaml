@@ -5,6 +5,13 @@ metadata:
 spec:
   pvReclaimPolicy: Retain
   configuration:
+    zookeeper:
+      nodes:
+        - host: tob44.bigdata.lycc.qihoo.net
+          port: 2181
+      session_timeout_ms: 30000
+      operation_timeout_ms: 10000
+      root: "/simple01"
     users:
       default/networks/ip:
         - "0.0.0.0/0"
@@ -18,4 +25,4 @@ spec:
         name: cluster
         layout:
           shardsCount: 2
-          replicasCount:  1
+          replicasCount: 2

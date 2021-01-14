@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-package controllers
+package daisymanager
 
 import (
 	"context"

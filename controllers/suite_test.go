@@ -17,6 +17,7 @@ limitations under the License.
 package controllers
 
 import (
+	"github.com/daisy/daisy-operator/controllers/daisymanager"
 	"path/filepath"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"testing"
@@ -75,14 +76,14 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).ToNot(HaveOccurred())
 
-	deps := &Dependencies{
+	deps := &daisymanager.Dependencies{
 		Client:   mgr.GetClient(),
 		Log:      ctrl.Log.WithName("controllers").WithName("DaisyInstallation"),
 		Recorder: mgr.GetEventRecorderFor("DaisyController"),
 	}
-	var dmm Manager
+	var dmm daisymanager.Manager
 	configPath := ""
-	dmm, err = NewDaisyMemberManager(deps, configPath)
+	dmm, err = daisymanager.NewDaisyMemberManager(deps, configPath)
 	Expect(err).ToNot(HaveOccurred())
 
 	err = (&DaisyInstallationReconciler{

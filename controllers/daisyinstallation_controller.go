@@ -19,6 +19,8 @@ package controllers
 import (
 	"context"
 	daisycomv1 "github.com/daisy/daisy-operator/api/v1"
+	"github.com/daisy/daisy-operator/controllers/daisymanager"
+	"github.com/daisy/daisy-operator/pkg/k8s"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/record"
 
@@ -36,7 +38,7 @@ type DaisyInstallationReconciler struct {
 	Log      logr.Logger
 	Recorder record.EventRecorder
 	Scheme   *runtime.Scheme
-	DMM      Manager
+	DMM      daisymanager.Manager
 }
 
 // +kubebuilder:rbac:groups=daisy.com,resources=daisyinstallations,verbs=get;list;watch;create;update;patch;delete
@@ -77,7 +79,7 @@ func (r *DaisyInstallationReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		isDelete = true
 	}
 
-	oldSpec, err := GetInstallationLastAppliedSpec(di)
+	oldSpec, err := k8s.GetInstallationLastAppliedSpec(di)
 	if err != nil {
 		log.Info("fail to get last applied spec")
 	} else {
@@ -91,7 +93,7 @@ func (r *DaisyInstallationReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	// Need to take action to update daisy installation
 
 	if err := r.DMM.Sync(old, di); err != nil {
-		if IsRequeueError(err) {
+		if k8s.IsRequeueError(err) {
 			return ctrl.Result{Requeue: true}, nil
 		} else {
 			return ctrl.Result{}, err
@@ -107,7 +109,7 @@ func (r *DaisyInstallationReconciler) Reconcile(ctx context.Context, req ctrl.Re
 			}
 
 			di.Spec = before.Spec
-			if err = SetInstallationLastAppliedConfigAnnotation(di); err != nil {
+			if err = k8s.SetInstallationLastAppliedConfigAnnotation(di); err != nil {
 				return ctrl.Result{}, nil
 			}
 

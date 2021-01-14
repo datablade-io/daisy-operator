@@ -1,7 +1,9 @@
-package controllers
+package daisymanager
 
 import (
 	"context"
+	"fmt"
+	"github.com/daisy/daisy-operator/pkg/k8s"
 	. "github.com/onsi/gomega"
 	apps "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -19,6 +21,30 @@ func getKey(obj metav1.Object) client.ObjectKey {
 	}
 }
 
+func fillLayout(clusterName string, di *v1.DaisyInstallation) {
+	layout := di.Spec.Configuration.Clusters[clusterName].Layout
+	shards := make(map[string]v1.Shard)
+
+	for i := 0; i < layout.ShardsCount; i++ {
+		shardName := fmt.Sprintf("%s-%s-%d", di.Name, clusterName, i)
+		shard := v1.Shard{
+			Name:     shardName,
+			Replicas: make(map[string]v1.Replica),
+		}
+		for j := 0; j < layout.ReplicasCount; j++ {
+			replicaName := CreateReplicaName(shardName, j, nil)
+			shard.Replicas[replicaName] = v1.Replica{
+				Name: replicaName,
+			}
+		}
+		shards[shardName] = shard
+	}
+	layout.Shards = shards
+	cluster := di.Spec.Configuration.Clusters[clusterName]
+	cluster.Layout = layout
+	di.Spec.Configuration.Clusters[clusterName] = cluster
+}
+
 func scaleInByShard(di *v1.DaisyInstallation, clusterName string, num int) {
 	cluster := di.Spec.Configuration.Clusters[clusterName]
 	cluster.Layout.ShardsCount -= num
@@ -27,7 +53,7 @@ func scaleInByShard(di *v1.DaisyInstallation, clusterName string, num int) {
 
 func scaleByReplica(di *v1.DaisyInstallation, clusterName string, num int) {
 	cluster := di.Spec.Configuration.Clusters[clusterName]
-	cluster.Layout.ReplicasCount -= num
+	cluster.Layout.ReplicasCount += num
 	di.Spec.Configuration.Clusters[clusterName] = cluster
 }
 
@@ -105,29 +131,29 @@ func (c *checker) checkOwnerRef(refs []metav1.OwnerReference) {
 	c.g.Expect(refs).To(Equal(nil))
 }
 
+func updateAllStsToReady(cli client.Client, di *v1.DaisyInstallation, g *GomegaWithT) {
+	sets := apps.StatefulSetList{}
+	g.Expect(cli.List(context.Background(), &sets, client.InNamespace(di.Namespace))).
+		Should(Succeed())
+
+	// update sts and Sync status
+	for _, set := range sets.Items {
+		set.Status.ReadyReplicas = *set.Spec.Replicas
+		set.Status.CurrentReplicas = *set.Spec.Replicas
+		set.Status.UpdatedReplicas = *set.Spec.Replicas
+		set.Status.ObservedGeneration = set.ObjectMeta.Generation
+		g.Expect(cli.Status().Update(context.Background(), &set)).Should(Succeed())
+	}
+}
+
 func prepareResourceForInstallation(m *DaisyMemberManager, di *v1.DaisyInstallation, toComplete bool, g *GomegaWithT) {
-	err := RequeueErrorf("")
-	for err != nil && IsRequeueError(err) {
+	err := k8s.RequeueErrorf("")
+	for err != nil && k8s.IsRequeueError(err) {
 		err = m.Sync(nil, di)
 	}
 
 	if toComplete {
-		cli := m.deps.Client
-		sets := apps.StatefulSetList{}
-		g.Expect(cli.List(context.Background(), &sets, client.InNamespace(di.Namespace))).
-			Should(Succeed())
-		g.Expect(di.Status.ReadyReplicas).To(Equal(0))
-		g.Expect(di.Status.State).To(Equal(v1.StatusInProgress))
-
-		// update sts and Sync status
-		for _, set := range sets.Items {
-			set.Status.ReadyReplicas = *set.Spec.Replicas
-			set.Status.CurrentReplicas = *set.Spec.Replicas
-			set.Status.UpdatedReplicas = *set.Spec.Replicas
-			set.Status.ObservedGeneration = set.ObjectMeta.Generation
-			g.Expect(cli.Status().Update(context.Background(), &set)).Should(Succeed())
-		}
-
+		updateAllStsToReady(m.deps.Client, di, g)
 		g.Expect(m.Sync(di, di)).Should(Succeed())
 		g.Expect(di.Status.State).To(Equal(v1.StatusCompleted))
 	}
@@ -137,8 +163,8 @@ func runSync(m *DaisyMemberManager, old, cur *v1.DaisyInstallation, notOnce bool
 	if !notOnce {
 		m.Sync(old, cur)
 	} else {
-		err := RequeueErrorf("")
-		for err != nil && IsRequeueError(err) {
+		err := k8s.RequeueErrorf("")
+		for err != nil && k8s.IsRequeueError(err) {
 			err = m.Sync(old, cur)
 			old = cur
 		}

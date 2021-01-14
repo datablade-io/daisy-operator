@@ -13,13 +13,14 @@
  * limitations under the License.
  */
 
-package controllers
+package daisymanager
 
 import (
 	"context"
 	"fmt"
 
 	"github.com/daisy/daisy-operator/api/v1"
+	"github.com/daisy/daisy-operator/pkg/k8s"
 	"github.com/daisy/daisy-operator/pkg/label"
 	"github.com/daisy/daisy-operator/pkg/util"
 
@@ -35,6 +36,19 @@ import (
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+const (
+	ActionAdd    SyncAction = "Add"
+	ActionUpdate SyncAction = "Update"
+	ActionDelete SyncAction = "Delete"
+	ActionNone   SyncAction = "None"
+)
+
+type SyncAction string
+
+type syncResult struct {
+	Action SyncAction
+}
 
 // Manager implements the logic for syncing replicas and shards of daisycluster.
 type Manager interface {
@@ -54,6 +68,7 @@ type DaisyMemberManager struct {
 	normalizer *Normalizer
 	cfgMgr     *ConfigManager
 	cfgGen     *configSectionsGenerator
+	schemer    *Schemer
 	//failover                 Failover
 	//scaler                   Scaler
 	//upgrader                 Upgrader
@@ -71,6 +86,11 @@ func NewDaisyMemberManager(deps *Dependencies, initConfigFilePath string) (Manag
 		normalizer: NewNormalizer(cfgMgr),
 		cfgMgr:     cfgMgr,
 		cfgGen:     nil,
+		schemer: NewSchemer(
+			cfgMgr.Config().CHUsername,
+			cfgMgr.Config().CHPassword,
+			cfgMgr.Config().CHPort,
+			deps.Log.WithName("schemer")),
 		//failover: failover,
 		//scaler:   scaler,
 		//upgrader: upgrader,
@@ -134,7 +154,7 @@ func (m *DaisyMemberManager) Sync(old, cur *v1.DaisyInstallation) error {
 	}
 
 	if err = m.syncConfiguration(cur, &cur.Spec.Configuration); err != nil {
-		if !IsRequeueError(err) {
+		if !k8s.IsRequeueError(err) {
 			log.Error(err, "Sync configuration fail")
 		}
 		return err
@@ -144,7 +164,7 @@ func (m *DaisyMemberManager) Sync(old, cur *v1.DaisyInstallation) error {
 	// TODO: create service for cluster memeber
 	//svcList := m.getMemeberService()
 
-	if err = SetInstallationLastAppliedConfigAnnotation(cur); err != nil {
+	if err = k8s.SetInstallationLastAppliedConfigAnnotation(cur); err != nil {
 		return err
 	}
 
@@ -335,7 +355,7 @@ func (m *DaisyMemberManager) syncService(ctx *memberContext, di *v1.DaisyInstall
 	}
 	err := m.deps.Client.Get(context.Background(), key, oldSvcTmp)
 	if errors.IsNotFound(err) {
-		if err = SetServiceLastAppliedConfigAnnotation(newSvc); err != nil {
+		if err = k8s.SetServiceLastAppliedConfigAnnotation(newSvc); err != nil {
 			return err
 		}
 		m.deps.Recorder.Eventf(di, corev1.EventTypeNormal, "Created", "Created Service %q", newSvc.Name)
@@ -349,7 +369,7 @@ func (m *DaisyMemberManager) syncService(ctx *memberContext, di *v1.DaisyInstall
 
 	oldSvc := oldSvcTmp.DeepCopy()
 
-	equal, err := ServiceEqual(newSvc, oldSvc)
+	equal, err := k8s.ServiceEqual(newSvc, oldSvc)
 	if err != nil {
 		return err
 	}
@@ -357,7 +377,7 @@ func (m *DaisyMemberManager) syncService(ctx *memberContext, di *v1.DaisyInstall
 		svc := *oldSvc
 		svc.Spec = newSvc.Spec
 		// TODO add unit test
-		err = SetServiceLastAppliedConfigAnnotation(&svc)
+		err = k8s.SetServiceLastAppliedConfigAnnotation(&svc)
 		if err != nil {
 			return err
 		}
@@ -396,7 +416,7 @@ func (m *DaisyMemberManager) getNewInstallationService(di *v1.DaisyInstallation)
 			Name:            serviceName,
 			Namespace:       di.Namespace,
 			Labels:          svcLabel.Labels(),
-			OwnerReferences: []metav1.OwnerReference{GetOwnerRef(di)},
+			OwnerReferences: []metav1.OwnerReference{k8s.GetOwnerRef(di)},
 		},
 		Spec: corev1.ServiceSpec{
 			// ClusterIP: templateDefaultsServiceClusterIP,
@@ -437,7 +457,7 @@ func (m *DaisyMemberManager) getNewReplicaService(ctx *memberContext, di *v1.Dai
 			Name:            serviceName,
 			Namespace:       ctx.Namespace,
 			Labels:          svcLabel.Labels(),
-			OwnerReferences: []metav1.OwnerReference{GetOwnerRef(di)},
+			OwnerReferences: []metav1.OwnerReference{k8s.GetOwnerRef(di)},
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
@@ -534,7 +554,7 @@ func (m *DaisyMemberManager) syncCluster(ctx *memberContext, di *v1.DaisyInstall
 
 	for name, shard := range cluster.Layout.Shards {
 		if err := m.syncShard(ctx, di, &shard); err != nil {
-			if !IsRequeueError(err) {
+			if !k8s.IsRequeueError(err) {
 				log.Error(err, "sync shard %s fail", "Shard", name)
 			}
 			return err
@@ -573,8 +593,8 @@ func (m *DaisyMemberManager) syncShard(ctx *memberContext, di *v1.DaisyInstallat
 
 	var err error
 	for name, replica := range shard.Replicas {
-		if err = m.syncReplica(ctx, di, &replica); err != nil {
-			if !IsRequeueError(err) {
+		if _, err = m.syncReplica(ctx, di, &replica); err != nil {
+			if !k8s.IsRequeueError(err) {
 				log.Error(err, "sync replica %s fail, error %v", "replica", name)
 			} else {
 				log.Info("wait for replica running", "replica", name)
@@ -601,7 +621,11 @@ func (m *DaisyMemberManager) syncShard(ctx *memberContext, di *v1.DaisyInstallat
 	return nil
 }
 
-func (m *DaisyMemberManager) syncReplica(ctx *memberContext, di *v1.DaisyInstallation, replica *v1.Replica) error {
+func (m *DaisyMemberManager) syncReplica(ctx *memberContext, di *v1.DaisyInstallation, replica *v1.Replica) (*syncResult, error) {
+	log := m.deps.Log.WithValues("Replica", replica.Name)
+	stsSyncResult := &syncResult{Action: ActionNone}
+	var err error
+
 	ctx.CurReplica = replica.Name
 	if di.Status.Clusters[ctx.CurCluster].Shards[ctx.CurShard].Replicas == nil {
 		shardStatus := di.Status.Clusters[ctx.CurCluster].Shards[ctx.CurShard]
@@ -610,21 +634,39 @@ func (m *DaisyMemberManager) syncReplica(ctx *memberContext, di *v1.DaisyInstall
 	}
 
 	cm := m.getConfigMapReplica(ctx, di, replica)
-	if err := m.syncConfigMap(di, cm, true); err != nil {
-		return err
+	if err = m.syncConfigMap(di, cm, true); err != nil {
+		return stsSyncResult, err
 	}
 
-	if err := m.syncStatefulSetForDaisyCluster(ctx, di, replica); err != nil {
-		return err
+	if stsSyncResult, err = m.syncStatefulSetForDaisyCluster(ctx, di, replica); err != nil {
+		return stsSyncResult, err
 	}
 
 	//TODO: sync PVs
 
-	return m.syncServiceForReplica(ctx, di, replica)
+	if err := m.syncServiceForReplica(ctx, di, replica); err != nil {
+		return nil, err
+	}
+
+	if replica.IsReady(ctx.CurCluster, ctx.CurShard, di) &&
+		!replica.IsSync(ctx.CurCluster, ctx.CurShard, di) {
+		// TODO: in future use Job to sync tables to avoid block sync loop of controller
+		if err := m.schemer.CreateTablesForReplica(ctx, di, replica); err != nil {
+			log.Error(err, "Create Tables for Replica failed")
+			return nil, err
+		}
+		status := di.Status.GetReplicaStatus(replica)
+		status.State = v1.Sync
+		di.Status.SetReplicaStatus(ctx.CurCluster, ctx.CurShard, replica.Name, *status)
+		di.Status.ReadyReplicas++
+	}
+
+	return nil, nil
 }
 
-func (m *DaisyMemberManager) syncStatefulSetForDaisyCluster(ctx *memberContext, di *v1.DaisyInstallation, replica *v1.Replica) error {
+func (m *DaisyMemberManager) syncStatefulSetForDaisyCluster(ctx *memberContext, di *v1.DaisyInstallation, replica *v1.Replica) (*syncResult, error) {
 	log := m.deps.Log.WithValues("replica", replica.Name)
+	result := &syncResult{Action: ActionNone}
 
 	ns := di.GetNamespace()
 	dcName := di.GetName()
@@ -636,7 +678,7 @@ func (m *DaisyMemberManager) syncStatefulSetForDaisyCluster(ctx *memberContext, 
 	var oldSet *apps.StatefulSet = nil
 	err := m.deps.Client.Get(context.Background(), key, oldSetTmp)
 	if err != nil && !errors.IsNotFound(err) {
-		return fmt.Errorf("syncStatefulSetForDaisyCluster: failed to get sts %s for replica %s/%s, error: %s", replica.Name, ns, dcName, err)
+		return result, fmt.Errorf("syncStatefulSetForDaisyCluster: failed to get sts %s for replica %s/%s, error: %s", replica.Name, ns, dcName, err)
 	}
 	setNotExist := errors.IsNotFound(err)
 
@@ -644,41 +686,30 @@ func (m *DaisyMemberManager) syncStatefulSetForDaisyCluster(ctx *memberContext, 
 		oldSet = oldSetTmp.DeepCopy()
 	}
 
-	// TODO: enhance the status update here
-	if err := m.syncDaisyClusterStatus(ctx, di, oldSet); err != nil {
-		return err
-	}
-
 	if di.Spec.Paused {
 		log.V(4).Info("daisy cluster is paused, skip syncing for daisy statefulset")
-		return nil
+		return result, nil
 	}
 
 	newSet, err := getNewSetForDaisyCluster(ctx, di, replica)
 	if err != nil {
-		return err
+		return result, err
 	}
 	if setNotExist {
-		err = SetStatefulSetLastAppliedConfigAnnotation(newSet)
+		result.Action = ActionAdd
+		err = k8s.SetStatefulSetLastAppliedConfigAnnotation(newSet)
 		if err != nil {
-			return err
+			return result, err
 		}
 		if err = m.deps.Client.Create(context.Background(), newSet); err != nil {
-			return err
+			return result, err
 		}
-		replicaStatus := v1.ReplicaStatus{}
-		replicaStatus.StatefulSet = &apps.StatefulSetStatus{}
-		shardStatus := di.Status.Clusters[ctx.CurCluster].Shards[ctx.CurShard]
-		if shardStatus.Replicas == nil {
-			//unusual case
-			shardStatus.Replicas = map[string]v1.ReplicaStatus{}
-		}
-		shardStatus.Replicas[replica.Name] = replicaStatus
-		di.Status.Clusters[ctx.CurCluster].Shards[ctx.CurShard] = shardStatus
-		di.Status.AddedReplicasCount++
 		m.deps.Recorder.Eventf(di, corev1.EventTypeNormal, "Created", "Created StatefulSet %q", replica.Name)
 		log.Info("Create Sts for replica")
-		return RequeueErrorf("DaisyInstallation: [%s/%s], waiting for replica [%s] running", ns, dcName, replica.Name)
+		if err = m.syncRepliaStatus(ctx, di, newSet, result); err != nil {
+			log.Error(err, "Update status fail after create Sts for replica")
+		}
+		return result, k8s.RequeueErrorf("DaisyInstallation: [%s/%s], waiting for replica [%s] running", ns, dcName, replica.Name)
 	}
 
 	//if _, err := m.setStoreLabelsForTiKV(di); err != nil {
@@ -712,43 +743,78 @@ func (m *DaisyMemberManager) syncStatefulSetForDaisyCluster(ctx *memberContext, 
 	//}
 
 	// Update StatefulSet
-	if !StatefulSetEqual(newSet, oldSet) {
+	if !k8s.StatefulSetEqual(newSet, oldSet) {
+		result.Action = ActionUpdate
 		if err = UpdateStatefulSet(m.deps.Client, di, newSet, oldSet); err != nil {
 			log.Error(err, "Update StatefulSet fail")
 		}
-		di.Status.UpdatedReplicasCount++
 	} else {
 		newSet = oldSet
 	}
 
 	// Update Status of StatefulSet
-	if hasStatefulSetReachedGeneration(newSet) {
-		di.Status.ReadyReplicas++
-	}
+	err = m.syncRepliaStatus(ctx, di, newSet, result)
 
-	return err
+	return result, err
 }
 
-func (m *DaisyMemberManager) syncDaisyClusterStatus(ctx *memberContext, di *v1.DaisyInstallation, set *apps.StatefulSet) error {
-	//TODO add logic to update Daisy installation status
+func (m *DaisyMemberManager) syncRepliaStatus(ctx *memberContext, di *v1.DaisyInstallation, set *apps.StatefulSet, result *syncResult) error {
 	if set == nil {
 		// skip if not created yet
 		return nil
 	}
-	replicaStatus := di.Status.Clusters[ctx.CurCluster].Shards[ctx.CurShard].Replicas[ctx.CurReplica]
+
+	shardStatus := di.Status.Clusters[ctx.CurCluster].Shards[ctx.CurShard]
+	if shardStatus.Replicas == nil {
+		//unusual case
+		shardStatus.Replicas = map[string]v1.ReplicaStatus{}
+	}
+	var replicaStatus v1.ReplicaStatus
+	var ok bool
+	if replicaStatus, ok = di.Status.Clusters[ctx.CurCluster].Shards[ctx.CurShard].Replicas[ctx.CurReplica]; !ok {
+		replicaStatus = v1.ReplicaStatus{
+			Name:               ctx.CurReplica,
+			LastTransitionTime: metav1.Now(),
+		}
+	}
 	replicaStatus.StatefulSet = &set.Status
-	replicaStatus.LastTransitionTime = metav1.Now()
-	upgrading, err := m.statefulSetIsUpgradingFn(m.deps.Client, set, di)
+
+	switch result.Action {
+	case ActionAdd:
+		di.Status.AddedReplicasCount++
+		replicaStatus.LastTransitionTime = metav1.Now()
+	case ActionUpdate:
+		di.Status.UpdatedReplicasCount++
+		replicaStatus.LastTransitionTime = metav1.Now()
+	}
+
+	var upgrading = false
+	var ready = false
+	var err error
+
+	// for fake daisy manager, statefulSetIsUpgradingFn might be nil
+	if m.statefulSetIsUpgradingFn != nil {
+		upgrading, err = m.statefulSetIsUpgradingFn(m.deps.Client, set, di)
+	}
 	if err != nil {
 		return err
 	}
+
+	if k8s.HasStatefulSetReachedGeneration(set) {
+		ready = true
+	}
+
 	// Scaling takes precedence over upgrading.
-	if *set.Spec.Replicas != 1 {
+	if set.Status.ReadyReplicas != 1 {
 		replicaStatus.Phase = v1.ScalePhase
+		replicaStatus.State = v1.NotSync
 	} else if upgrading {
 		replicaStatus.Phase = v1.UpgradePhase
+	} else if ready && replicaStatus.State == v1.NotSync {
+		replicaStatus.Phase = v1.ReadyPhase
 	} else {
 		replicaStatus.Phase = v1.NormalPhase
+		di.Status.ReadyReplicas++
 	}
 
 	di.Status.Clusters[ctx.CurCluster].Shards[ctx.CurShard].Replicas[ctx.CurReplica] = replicaStatus
@@ -870,8 +936,11 @@ func (m *DaisyMemberManager) deleteReplica(ctx *memberContext, di *v1.DaisyInsta
 	// Need to delete all these item
 
 	var err error
-	err = m.deleteTables(ctx, r)
-	if err := m.deleteStatefulSetForReplica(ctx, di, r); err != nil {
+	if err = m.deleteTables(ctx, r); err == nil {
+		m.deps.Recorder.Eventf(di, corev1.EventTypeNormal, "Deleting", "Delete Replicated* tables for Replica  %q", r.Name)
+	}
+
+	if err = m.deleteStatefulSetForReplica(ctx, di, r); err != nil {
 		return err
 	}
 	di.Status.DeletedReplicasCount++
@@ -940,8 +1009,19 @@ func (m *DaisyMemberManager) deleteServiceForReplica(ctx *memberContext, di *v1.
 }
 
 func (m *DaisyMemberManager) deleteTables(ctx *memberContext, r *v1.Replica) error {
-	m.deps.Log.V(2).Info("Delete Tables for Replica", "replica", ctx.CurReplica)
-	return nil
+	log := m.deps.Log.WithValues("Replica", r.Name)
+	log.V(2).Info("Delete Tables for Replica", "replica", ctx.CurReplica)
+	if !r.CanDeleteAllPVCs() {
+		return nil
+	}
+
+	err := m.schemer.DeleteTablesForReplica(ctx.Namespace, r)
+	if err == nil {
+		log.Info("Delete Replicated* tables successfully")
+	} else {
+		log.Error(err, "Delete Replicated* tables fail")
+	}
+	return err
 }
 
 func (m *DaisyMemberManager) IsInitialized(di *v1.DaisyInstallation) bool {
