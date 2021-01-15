@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-package controllers
+package daisymanager
 
 import (
 	"crypto/sha256"
@@ -539,11 +539,6 @@ func (n *Normalizer) normalizeReplica(replica *v1.Replica, shard *v1.Shard, clus
 	n.normalizeConfigurationSettings(&replica.Files)
 	//replica.InheritTemplatesFrom(cluster)
 	// Normalize Shards
-}
-
-// CreateReplicaName return a name of a replica
-func CreateReplicaName(shardName string, index int, skip sets.Int) string {
-	return fmt.Sprintf("%s-%d", shardName, getNextIndex(index, skip))
 }
 
 func getNextIndex(index int, skip sets.Int) int {

@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-package controllers
+package daisymanager
 
 import "github.com/daisy/daisy-operator/api/v1"
 

@@ -13,13 +13,18 @@
  * limitations under the License.
  */
 
-package controllers
+package daisymanager
 
 import (
 	"context"
 	"fmt"
-	v1 "github.com/daisy/daisy-operator/api/v1"
-	"github.com/daisy/daisy-operator/pkg/label"
+	"github.com/daisy/daisy-operator/pkg/k8s"
+	log "github.com/golang/glog"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"strconv"
+	"strings"
+	"time"
+
 	apps "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,8 +32,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"net/url"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"strconv"
-	"strings"
+
+	v1 "github.com/daisy/daisy-operator/api/v1"
+	"github.com/daisy/daisy-operator/pkg/label"
 )
 
 const (
@@ -56,20 +62,20 @@ func UpdateStatefulSet(client client.Client, object runtime.Object, newSet, oldS
 	if oldSet.Annotations == nil {
 		oldSet.Annotations = map[string]string{}
 	}
-	if !StatefulSetEqual(newSet, oldSet) || isOrphan {
+	if !k8s.StatefulSetEqual(newSet, oldSet) || isOrphan {
 		set := *oldSet
 		// Retain the deprecated last applied pod template annotation for backward compatibility
 		var podConfig string
 		var hasPodConfig bool
 		if oldSet.Spec.Template.Annotations != nil {
-			podConfig, hasPodConfig = oldSet.Spec.Template.Annotations[LastAppliedConfigAnnotation]
+			podConfig, hasPodConfig = oldSet.Spec.Template.Annotations[k8s.LastAppliedConfigAnnotation]
 		}
 		set.Spec.Template = newSet.Spec.Template
 		if hasPodConfig {
 			if set.Spec.Template.Annotations == nil {
 				set.Spec.Template.Annotations = map[string]string{}
 			}
-			set.Spec.Template.Annotations[LastAppliedConfigAnnotation] = podConfig
+			set.Spec.Template.Annotations[k8s.LastAppliedConfigAnnotation] = podConfig
 		}
 		set.Annotations = newSet.Annotations
 		v, ok := oldSet.Annotations[label.AnnStsLastSyncTimestamp]
@@ -82,7 +88,7 @@ func UpdateStatefulSet(client client.Client, object runtime.Object, newSet, oldS
 			set.OwnerReferences = newSet.OwnerReferences
 			set.Labels = newSet.Labels
 		}
-		err := SetStatefulSetLastAppliedConfigAnnotation(&set)
+		err := k8s.SetStatefulSetLastAppliedConfigAnnotation(&set)
 		if err != nil {
 			return err
 		}
@@ -104,7 +110,7 @@ func (m *DaisyMemberManager) getConfigMapCHICommon(di *v1.DaisyInstallation) *co
 			Name:            CreateConfigMapCommonName(ctx),
 			Namespace:       di.Namespace,
 			Labels:          cmLabel.ConfigMapType(label.ConfigMapValueCommon).Labels(),
-			OwnerReferences: []metav1.OwnerReference{GetOwnerRef(di)},
+			OwnerReferences: []metav1.OwnerReference{k8s.GetOwnerRef(di)},
 		},
 		// Data contains several sections which are to be several xml config files
 		Data: m.cfgGen.CreateConfigsCommon(),
@@ -123,7 +129,7 @@ func (m *DaisyMemberManager) getConfigMapCHICommonUsers(di *v1.DaisyInstallation
 			Name:            CreateConfigMapCommonUsersName(ctx),
 			Namespace:       di.Namespace,
 			Labels:          cmLabel.ConfigMapType(label.ConfigMapValueCommonUsers).Labels(),
-			OwnerReferences: []metav1.OwnerReference{GetOwnerRef(di)},
+			OwnerReferences: []metav1.OwnerReference{k8s.GetOwnerRef(di)},
 		},
 		// Data contains several sections which are to be several xml config files
 		Data: m.cfgGen.CreateConfigsUsers(),
@@ -138,14 +144,14 @@ func (m *DaisyMemberManager) getConfigMapReplica(ctx *memberContext, di *v1.Dais
 			Name:            CreateConfigMapPodName(ctx),
 			Namespace:       ctx.Namespace,
 			Labels:          cmLabel.ConfigMapType(label.ConfigMapValueHost).Labels(),
-			OwnerReferences: []metav1.OwnerReference{GetOwnerRef(di)},
+			OwnerReferences: []metav1.OwnerReference{k8s.GetOwnerRef(di)},
 		},
 		Data: m.cfgGen.CreateConfigsHost(ctx, di, r),
 	}
 }
 
 func getNewSetForDaisyCluster(ctx *memberContext, di *v1.DaisyInstallation, replica *v1.Replica) (*apps.StatefulSet, error) {
-	statefulSetName := CreateStatefulSetName(replica)
+	statefulSetName := replica.Name
 	serviceName := CreateStatefulSetServiceName(replica)
 
 	// Create apps.StatefulSet object
@@ -159,7 +165,7 @@ func getNewSetForDaisyCluster(ctx *memberContext, di *v1.DaisyInstallation, repl
 			Name:            statefulSetName,
 			Namespace:       di.GetNamespace(),
 			Labels:          replicaLabel,
-			OwnerReferences: []metav1.OwnerReference{GetOwnerRef(di)},
+			OwnerReferences: []metav1.OwnerReference{k8s.GetOwnerRef(di)},
 		},
 		Spec: apps.StatefulSetSpec{
 			Replicas:    &replicasNum,
@@ -303,6 +309,73 @@ func CreatePodRegexp(di *v1.DaisyInstallation, template string) string {
 	return newNameMacroReplacerInstallation(di).Replace(template)
 }
 
+func CreatePodFQDNsOfInstallation(di *v1.DaisyInstallation) []string {
+	fqdns := make([]string, 0)
+	di.LoopAllReplicas(func(r *v1.Replica) error {
+		fqdns = append(fqdns, CreatePodFQDN(di.Namespace, r))
+		return nil
+	})
+
+	return fqdns
+}
+
+func CreatePodFQDN(namespace string, r *v1.Replica) string {
+	return fmt.Sprintf("%s.%s", CreatePodHostname(r), namespace)
+}
+
+func CreatePodFQDNsOfCluster(clusterName string, di *v1.DaisyInstallation) []string {
+	fqdns := make([]string, 0)
+	var cluster v1.Cluster
+	var ok bool
+
+	if cluster, ok = di.Spec.Configuration.Clusters[clusterName]; !ok {
+		return fqdns
+	}
+	fn := func(name string, shard *v1.Shard, di *v1.DaisyInstallation, cluster *v1.Cluster) error {
+		for _, r := range shard.Replicas {
+			fqdns = append(fqdns, CreatePodHostname(&r))
+		}
+		return nil
+	}
+	cluster.LoopShards(di, fn)
+
+	return fqdns
+}
+
+func CreatePodFQDNsOfShard(clusterName string, shardName string, di *v1.DaisyInstallation) []string {
+	fqdns := make([]string, 0)
+	var shard v1.Shard
+	var ok bool
+
+	if shard, ok = di.Spec.Configuration.Clusters[clusterName].Layout.Shards[shardName]; !ok {
+		return fqdns
+	}
+
+	for _, r := range shard.Replicas {
+		fqdns = append(fqdns, CreatePodHostname(&r))
+	}
+
+	return fqdns
+}
+
+func GetNormalPodFQDNsOfShard(clusterName string, shardName string, di *v1.DaisyInstallation) []string {
+	fqdns := make([]string, 0)
+	var shard v1.Shard
+	var ok bool
+
+	if shard, ok = di.Spec.Configuration.Clusters[clusterName].Layout.Shards[shardName]; !ok {
+		return fqdns
+	}
+
+	for _, r := range shard.Replicas {
+		if r.IsNormal(clusterName, shardName, di) {
+			fqdns = append(fqdns, CreatePodHostname(&r))
+		}
+	}
+
+	return fqdns
+}
+
 func newNameMacroReplacerInstallation(di *v1.DaisyInstallation) *strings.Replacer {
 	return strings.NewReplacer(
 		macrosNamespace, di.Namespace,
@@ -370,7 +443,7 @@ func getClickHouseContainer(statefulSet *apps.StatefulSet) (*corev1.Container, b
 
 // getPodTemplate gets Pod Template to be used to create StatefulSet
 func getPodTemplate(replica *v1.Replica) *v1.DaisyPodTemplate {
-	statefulSetName := CreateStatefulSetName(replica)
+	statefulSetName := replica.Name
 
 	// Which pod template would be used - either explicitly defined in or a default one
 	//podTemplate, ok := replica.GetPodTemplate()
@@ -452,7 +525,7 @@ func newDefaultDaisyContainer() corev1.Container {
 						"user=" + url.QueryEscape(CHUsername) +
 						"&password=" + url.QueryEscape(CHPassword) +
 						"&query=" +
-						// SELECT throwIf(count()=0) FROM system.clusters WHERE cluster='all-sharded' AND is_local
+						// SELECT throwIf(count()=0) FROM system.clu	sters WHERE cluster='all-sharded' AND is_local
 						url.QueryEscape(
 							fmt.Sprintf(
 								"SELECT throwIf(count()=0) FROM system.clusters WHERE cluster='%s' AND is_local",
@@ -530,22 +603,13 @@ func MergeStringMaps(dst, src map[string]string, keys ...string) map[string]stri
 	return dst
 }
 
-// CreateStatefulSetName creates a name of a StatefulSet for ClickHouse instance
-func CreateStatefulSetName(replica *v1.Replica) string {
-	// Name can be generated either from default name pattern,
-	// or from personal name pattern provided in PodTemplate
-
-	// Create StatefulSet name based on name pattern available
-	return replica.Name
+// CreateReplicaName return a name of a replica
+func CreateReplicaName(shardName string, index int, skip sets.Int) string {
+	return fmt.Sprintf("%s-%d", shardName, getNextIndex(index, skip))
 }
 
 func labelReplica(ctx *memberContext, replica *v1.Replica) label.Label {
 	return label.New().Instance(ctx.Installation).Cluster(ctx.CurCluster).ShardName(ctx.CurShard).ReplicaName(replica.Name)
-}
-
-func getPodLabelForReplica(l label.Label) label.Label {
-	//TODO: add more pod specific labels
-	return l
 }
 
 // ExtractLastOrdinal returns the last ordinal number of replica or shard name, -1 means invalid name and no match ordinal can be extracted
@@ -561,4 +625,37 @@ func ExtractLastOrdinal(name string) int {
 		}
 	}
 	return r
+}
+
+// Retry
+func Retry(tries int, desc string, f func() error) error {
+	var err error
+	for try := 1; try <= tries; try++ {
+		err = f()
+		if err == nil {
+			// All ok, no need to retry more
+			if try > 1 {
+				// Done, but after some retries, this is not 'clean'
+				log.V(1).Infof("DONE attempt %d of %d: %s", try, tries, desc)
+			}
+			return nil
+		}
+
+		if try < tries {
+			// Try failed, need to sleep and retry
+			seconds := try * 5
+			log.V(1).Infof("FAILED attempt %d of %d, sleep %d sec and retry: %s", try, tries, seconds, desc)
+			select {
+			case <-time.After(time.Duration(seconds) * time.Second):
+			}
+		} else if tries == 1 {
+			// On single try do not put so much emotion. It just failed and user is not intended to retry
+			log.V(1).Infof("FAILED single try. No retries will be made for %s", desc)
+		} else {
+			// On last try no need to wait more
+			log.V(1).Infof("FAILED AND ABORT. All %d attempts: %s", tries, desc)
+		}
+	}
+
+	return err
 }

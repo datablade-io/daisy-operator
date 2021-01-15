@@ -29,12 +29,21 @@ import (
 type MemberPhase string
 
 const (
-	// NormalPhase represents normal state of TiDB cluster.
+	// MemberPhase
+	// NormalPhase represents normal state of replica.
 	NormalPhase MemberPhase = "Normal"
-	// UpgradePhase represents the upgrade state of TiDB cluster.
+	// UpgradePhase represents the upgrade state of replica.
 	UpgradePhase MemberPhase = "Upgrade"
-	// ScalePhase represents the scaling state of TiDB cluster.
+	// ScalePhase represents the scaling state of replica.
 	ScalePhase MemberPhase = "Scale"
+	// ReadyPhase represents statefulset is ready state
+	ReadyPhase MemberPhase = "Ready"
+
+	// State
+	// NotSync represent replica not sync distributed views and tables
+	// Sync represent replica has synced distributed views and tables
+	NotSync string = "NotSync"
+	Sync    string = "Sync"
 )
 
 // DaisyInstallationSpec defines the desired state of DaisyInstallation

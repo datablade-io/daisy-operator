@@ -114,7 +114,7 @@ func (di *DaisyInstallation) ReplicasCount() int {
 	count := 0
 
 	di.LoopClusters(func(name string, cluster *Cluster) error {
-		cluster.EnumerateShards(di, func(
+		cluster.LoopShards(di, func(
 			name string, shard *Shard, di *DaisyInstallation, cluster *Cluster) error {
 			count += len(shard.Replicas)
 			return nil
@@ -122,6 +122,20 @@ func (di *DaisyInstallation) ReplicasCount() int {
 		return nil
 	})
 	return count
+}
+
+// LoopAllReplicas exec fn func for each replica
+func (di *DaisyInstallation) LoopAllReplicas(fn func(r *Replica) error) {
+	di.LoopClusters(func(name string, cluster *Cluster) error {
+		cluster.LoopShards(di, func(
+			name string, shard *Shard, di *DaisyInstallation, cluster *Cluster) error {
+			for _, replica := range shard.Replicas {
+				fn(&replica)
+			}
+			return nil
+		})
+		return nil
+	})
 }
 
 const (
@@ -135,6 +149,34 @@ func (s *DaisyInstallationStatus) Reset() {
 	s.UpdatedReplicasCount = 0
 	s.AddedReplicasCount = 0
 	s.DeletedReplicasCount = 0
+}
+
+func (s *DaisyInstallationStatus) GetReplicaStatus(r *Replica) *ReplicaStatus {
+	for _, clusterStatus := range s.Clusters {
+		for _, shardStatus := range clusterStatus.Shards {
+			for _, repliaStatus := range shardStatus.Replicas {
+				if r.Name == repliaStatus.Name {
+					return repliaStatus.DeepCopy()
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func (s *DaisyInstallationStatus) SetReplicaStatus(clusterName, shardName, replicaName string, status ReplicaStatus) {
+	var ok bool
+	if _, ok = s.Clusters[clusterName]; ok {
+		if _, ok = s.Clusters[clusterName].Shards[shardName]; ok {
+			shard := s.Clusters[clusterName].Shards[shardName]
+			if shard.Replicas == nil {
+				shard.Replicas = make(map[string]ReplicaStatus)
+			}
+			shard.Replicas[replicaName] = status
+			s.Clusters[clusterName].Shards[shardName] = shard
+		}
+	}
 }
 
 func (cStatus *ClusterStatus) IsAllShardReady() bool {
@@ -273,4 +315,57 @@ func (replica *Replica) InheritSettingsFrom(shard *Shard) {
 
 func (replica *Replica) InheritFilesFrom(shard *Shard) {
 	(&replica.Files).MergeFrom(shard.Files)
+}
+
+func (replica *Replica) IsReady(clusterName string, shardName string, di *DaisyInstallation) bool {
+	var status ReplicaStatus
+	var ok bool
+
+	//status := di.Status.GetReplicaStatus(replica)
+
+	if status, ok = di.Status.Clusters[clusterName].Shards[shardName].Replicas[replica.Name]; !ok {
+		return false
+	}
+
+	if status.Phase == ReadyPhase {
+		return true
+	}
+	return false
+}
+
+func (replica *Replica) IsSync(clusterName string, shardName string, di *DaisyInstallation) bool {
+	var status ReplicaStatus
+	var ok bool
+
+	//status := di.Status.GetReplicaStatus(replica)
+
+	if status, ok = di.Status.Clusters[clusterName].Shards[shardName].Replicas[replica.Name]; !ok {
+		return false
+	}
+
+	if status.State == Sync {
+		return true
+	}
+	return false
+}
+
+func (replica *Replica) CanDeleteAllPVCs() bool {
+	//TODO: add logic when support PVC
+	return true
+}
+
+func (replica *Replica) IsNormal(clusterName string, shardName string, di *DaisyInstallation) bool {
+	var status ReplicaStatus
+	var ok bool
+
+	//status := di.Status.GetReplicaStatus(replica)
+
+	if status, ok = di.Status.Clusters[clusterName].Shards[shardName].Replicas[replica.Name]; !ok {
+		return false
+	}
+
+	if status.Phase == NormalPhase {
+		return true
+	}
+	return false
 }

@@ -18,6 +18,7 @@ package main
 
 import (
 	"flag"
+	"github.com/daisy/daisy-operator/controllers/daisymanager"
 	"github.com/spf13/pflag"
 	"os"
 
@@ -100,13 +101,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	deps := &controllers.Dependencies{
+	deps := &daisymanager.Dependencies{
 		Client:   mgr.GetClient(),
 		Log:      ctrl.Log.WithName("controllers").WithName("DaisyInstallation"),
 		Recorder: mgr.GetEventRecorderFor("DaisyController"),
 	}
-	var dmm controllers.Manager
-	if dmm, err = controllers.NewDaisyMemberManager(deps, configPath); err != nil {
+	var dmm daisymanager.Manager
+	if dmm, err = daisymanager.NewDaisyMemberManager(deps, configPath); err != nil {
 		setupLog.Error(err, "unable to create daisy member manager", "configPath", configPath)
 		os.Exit(1)
 	}

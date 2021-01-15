@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-package controllers
+package daisymanager
 
 import (
 	"context"
@@ -122,11 +122,11 @@ func TestDaisyMemberManager_Sync(t *testing.T) {
 			c.checkConfigMapCount(cli, 6)
 
 			// scale down
-			new := di.DeepCopy()
-			scaleInByShard(new, "cluster", 1)
-			err = m.Sync(di, new)
+			cur := di.DeepCopy()
+			scaleInByShard(cur, "cluster", 1)
+			err = m.Sync(di, cur)
 			g.Expect(err).ShouldNot(HaveOccurred())
-			g.Expect(new.Status.ShardsCount).To(Equal(2))
+			g.Expect(cur.Status.ShardsCount).To(Equal(2))
 		})
 	}
 }
@@ -232,7 +232,7 @@ func TestDaisyMemberManager_StatusUpdate(t *testing.T) {
 			},
 		},
 		{
-			name: "scale out, status changed to InProgress",
+			name: "scale out, status changed to NotSync, InProgress",
 			initObjs: []runtime.Object{
 				newTestInstallation(1, 1),
 			},
@@ -248,7 +248,42 @@ func TestDaisyMemberManager_StatusUpdate(t *testing.T) {
 				c.checkConfigMapCount(cli, 6)
 				c.checkStatefulSetCount(cli, 4)
 				g.Expect(di.Status.ReplicasCount).To(Equal(4))
+				g.Expect(di.Status.ReadyReplicas).To(Equal(1))
 				g.Expect(di.Status.State).To(Equal(v1.StatusInProgress))
+				g.Expect(di.Status.Clusters["cluster"].
+					Shards["test-installation-cluster-0"].
+					Replicas["test-installation-cluster-0-0"].State).To(Equal(v1.Sync))
+				g.Expect(di.Status.Clusters["cluster"].
+					Shards["test-installation-cluster-0"].
+					Replicas["test-installation-cluster-0-1"].State).To(Equal(v1.NotSync))
+			},
+		},
+		{
+			name: "scale out, eventually replica's state change to Sync",
+			initObjs: []runtime.Object{
+				newTestInstallation(1, 1),
+			},
+			old:  newTestInstallation(1, 1),
+			init: prepareResourceForInstallation,
+			update: func(m *DaisyMemberManager, di *v1.DaisyInstallation, g *GomegaWithT) {
+				scaleByReplica(di, "cluster", 1)
+				runSync(m, di, di, true)
+				updateAllStsToReady(m.deps.Client, di, g)
+			},
+			di:          newTestInstallation(1, 2),
+			notSyncOnce: true,
+			verify: func(cli client.Client, di *v1.DaisyInstallation, g *GomegaWithT) {
+				c := newChecker(di, g)
+				c.checkConfigMapCount(cli, 4)
+				c.checkStatefulSetCount(cli, 2)
+				g.Expect(di.Status.ReplicasCount).To(Equal(2))
+				g.Expect(di.Status.State).To(Equal(v1.StatusCompleted))
+				g.Expect(di.Status.Clusters["cluster"].
+					Shards["test-installation-cluster-0"].
+					Replicas["test-installation-cluster-0-0"].State).To(Equal(v1.Sync))
+				g.Expect(di.Status.Clusters["cluster"].
+					Shards["test-installation-cluster-0"].
+					Replicas["test-installation-cluster-0-1"].State).To(Equal(v1.Sync))
 			},
 		},
 		{
@@ -283,6 +318,7 @@ func TestDaisyMemberManager_StatusUpdate(t *testing.T) {
 
 			tt.init(m, old, true, g)
 			tt.update(m, old, g)
+			cur.Status = *old.Status.DeepCopy()
 			cur.Status.PrevSpec = old.Spec
 			runSync(m, old, cur, tt.notSyncOnce)
 			tt.verify(cli, cur, g)
@@ -390,11 +426,23 @@ func newFakeDaisyMemberManager(initObjs ...runtime.Object) (dmm *DaisyMemberMana
 		Log:      ctrl.Log.WithName("daisy_member_manager_test"),
 		Recorder: record.NewFakeRecorder(100),
 	}
-	tmp, err := NewDaisyMemberManager(fakeDeps, "")
+
+	cfgMgr, err := NewConfigManager(fakeDeps.Client, "")
 	if err != nil {
-		fmt.Printf("error: %v", err)
+		return nil, nil
 	}
-	dmm = tmp.(*DaisyMemberManager)
+	schemer, _ := NewFakeSchemer(
+		cfgMgr.Config().CHUsername,
+		cfgMgr.Config().CHPassword,
+		cfgMgr.Config().CHPort,
+		fakeDeps.Log.WithName("schemer"))
+	dmm = &DaisyMemberManager{
+		deps:       fakeDeps,
+		normalizer: NewNormalizer(cfgMgr),
+		cfgMgr:     cfgMgr,
+		cfgGen:     nil,
+		schemer:    schemer,
+	}
 
 	return dmm, fakeDeps.Client
 }

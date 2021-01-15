@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-package controllers
+package k8s
 
 import (
 	"fmt"
@@ -114,8 +114,8 @@ func GetOwnerRef(di *v1.DaisyInstallation) metav1.OwnerReference {
 	}
 }
 
-// hasStatefulSetReachedGeneration returns whether has StatefulSet reached the expected generation after upgrade or not
-func hasStatefulSetReachedGeneration(statefulSet *apps.StatefulSet) bool {
+// HasStatefulSetReachedGeneration returns whether has StatefulSet reached the expected generation after upgrade or not
+func HasStatefulSetReachedGeneration(statefulSet *apps.StatefulSet) bool {
 	if statefulSet == nil {
 		return false
 	}
