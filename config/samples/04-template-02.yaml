@@ -1,0 +1,27 @@
+apiVersion: "daisy.com/v1"
+kind: "DaisyInstallation"
+metadata:
+  name: "tpl01"
+spec:
+  useTemplates:
+    - name: template01
+      namespace: default
+      useType: "non"
+  defaults:
+    templates:
+      dataVolumeClaimTemplate: data-volume-template
+      logVolumeClaimTemplate: log-volume-template
+  pvReclaimPolicy: Retain
+  configuration:
+    users:
+      default/networks/ip:
+        - "0.0.0.0/0"
+    settings:
+      listen_host:
+        - "0.0.0.0"
+    clusters:
+      cluster:
+        name: cluster
+        layout:
+          shardsCount: 1
+          replicasCount:  1

@@ -12,7 +12,11 @@ resources:
   group: daisy.com
   kind: DaisyOperatorConfiguration
   version: v1
-version: 3-alphay
+- crdVersion: v1
+  group: daisy.com
+  kind: DaisyTemplate
+  version: v1
+version: 3-alpha
 plugins:
   manifests.sdk.operatorframework.io/v2: {}
   scorecard.sdk.operatorframework.io/v2: {}

@@ -2,4 +2,5 @@
 resources:
 - 01-simple-1shard-1repl.yaml
 - daisy.com_v1_daisyoperatorconfiguration.yaml
+- daisy.com_v1_daisytemplate.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

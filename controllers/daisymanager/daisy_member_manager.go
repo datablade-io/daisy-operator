@@ -19,11 +19,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/daisy/daisy-operator/api/v1"
-	"github.com/daisy/daisy-operator/pkg/k8s"
-	"github.com/daisy/daisy-operator/pkg/label"
-	"github.com/daisy/daisy-operator/pkg/util"
-
 	"github.com/go-logr/logr"
 	apps "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -35,6 +30,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/daisy/daisy-operator/api/v1"
+	"github.com/daisy/daisy-operator/pkg/k8s"
+	"github.com/daisy/daisy-operator/pkg/label"
+	"github.com/daisy/daisy-operator/pkg/util"
 )
 
 const (
@@ -53,7 +53,7 @@ type syncResult struct {
 // Manager implements the logic for syncing replicas and shards of daisycluster.
 type Manager interface {
 	// Sync	implements the logic for syncing daisycluster.
-	Sync(old, cur *v1.DaisyInstallation) error
+	Sync(cur *v1.DaisyInstallation) error
 }
 
 type Dependencies struct {
@@ -76,11 +76,8 @@ type DaisyMemberManager struct {
 }
 
 // NewTiKVMemberManager returns a *tikvMemberManager
-func NewDaisyMemberManager(deps *Dependencies, initConfigFilePath string) (Manager, error) {
-	cfgMgr, err := NewConfigManager(deps.Client, initConfigFilePath)
-	if err != nil {
-		return nil, err
-	}
+func NewDaisyMemberManager(deps *Dependencies, cfgMgr *ConfigManager) (Manager, error) {
+	//cfgMgr, err := NewConfigManager(deps.Client, initConfigFilePath)
 	m := &DaisyMemberManager{
 		deps:       deps,
 		normalizer: NewNormalizer(cfgMgr),
@@ -100,21 +97,22 @@ func NewDaisyMemberManager(deps *Dependencies, initConfigFilePath string) (Manag
 }
 
 // Sync fulfills the manager.Manager interface
-func (m *DaisyMemberManager) Sync(old, cur *v1.DaisyInstallation) error {
+func (m *DaisyMemberManager) Sync(cur *v1.DaisyInstallation) error {
 	ns := cur.GetNamespace()
 	dcName := cur.GetName()
 
-	log := m.deps.Log.WithValues("Namespace", ns, "Installation", dcName)
+	log := m.deps.Log.WithName("DaisyMemeberManager").WithValues("Namespace", ns, "Installation", dcName)
 
-	if old == nil && cur == nil {
+	if cur == nil {
 		return nil
 	}
 
+	oldStatus := cur.Status.DeepCopy()
 	// examine DeletionTimestamp to determine if object is under deletion
 	if !cur.ObjectMeta.DeletionTimestamp.IsZero() {
 		return m.deleteDaisyInstallation(cur)
 	} else {
-		m.deps.Log.V(3).Info("Registering finalizer for Directory Service")
+		m.deps.Log.V(3).Info("Registering finalizer for Daisy Installation")
 
 		// The object is not being deleted, so if it does not have our finalizer,
 		// then lets add the finalizer and update the object. This is equivalent
@@ -129,20 +127,22 @@ func (m *DaisyMemberManager) Sync(old, cur *v1.DaisyInstallation) error {
 
 	var err error
 
-	cur = m.normalize(cur)
-	m.cfgGen = NewConfigSectionsGenerator(NewConfigGenerator(cur), m.cfgMgr.Config())
-
-	// No spec change and not to delete, it must be status change
-	if old != nil && apiequality.Semantic.DeepEqual(old.Spec, cur.Spec) {
-		log.V(2).Info("Spec is the same, it should be status change", "oldSpec", old.Spec, "newSpec", cur.Spec)
-	}
+	curNorm := m.normalize(cur)
+	forCfg := cur.DeepCopy()
+	forCfg.Spec = curNorm.Spec
+	// TODO: refact ConfigGenerator to use Spec instead of DaisyInstallation
+	m.cfgGen = NewConfigSectionsGenerator(NewConfigGenerator(forCfg), m.cfgMgr.Config())
 
 	// Handle create & update scenarios
-	cur.Status.Reset()
 	ctx := &memberContext{
 		Namespace:    ns,
 		Installation: dcName,
+		Normalized:   *curNorm,
+		owner:        k8s.GetOwnerRef(cur),
 	}
+
+	fillStatus(ctx, cur)
+	cur.Status.Reset()
 	if err = m.syncServiceForInstallation(ctx, cur); err != nil {
 		log.Error(err, "Sync configmaps fail")
 		return err
@@ -153,18 +153,14 @@ func (m *DaisyMemberManager) Sync(old, cur *v1.DaisyInstallation) error {
 		return err
 	}
 
-	if err = m.syncConfiguration(cur, &cur.Spec.Configuration); err != nil {
+	if err = m.syncConfiguration(ctx, cur); err != nil {
 		if !k8s.IsRequeueError(err) {
 			log.Error(err, "Sync configuration fail")
 		}
 		return err
 	}
 
-	//TODO: update status of installation
-	// TODO: create service for cluster memeber
-	//svcList := m.getMemeberService()
-
-	if err = k8s.SetInstallationLastAppliedConfigAnnotation(cur); err != nil {
+	if err = k8s.SetInstallationLastAppliedConfigAnnotation(cur, &curNorm.Spec); err != nil {
 		return err
 	}
 
@@ -178,6 +174,17 @@ func (m *DaisyMemberManager) Sync(old, cur *v1.DaisyInstallation) error {
 	} else {
 		if cur.Status.State == v1.StatusCompleted {
 			cur.Status.State = v1.StatusInProgress
+		}
+	}
+
+	if !apiequality.Semantic.DeepEqual(oldStatus, cur.Status) {
+		// after update the installation, the spec will be changed by Client, therefore backup the spec first
+		if err = m.deps.Client.Update(context.Background(), cur); err != nil {
+			return err
+		}
+		log.Info("Update Status")
+		if err = UpdateInstallationStatus(m.deps.Client, cur, true); err != nil {
+			return err
 		}
 	}
 
@@ -195,7 +202,7 @@ func (m *DaisyMemberManager) deleteDaisyInstallation(di *v1.DaisyInstallation) e
 	// The object is being deleted
 	if util.InArray(DaisyFinalizer, di.GetFinalizers()) {
 		// our finalizer is present, so lets handle any external dependency
-		di = m.normalize(di)
+		norm := m.normalize(di)
 
 		// Exclude this CHI from monitoring
 		//w.c.deleteWatch(chi.Namespace, chi.Name)
@@ -206,9 +213,10 @@ func (m *DaisyMemberManager) deleteDaisyInstallation(di *v1.DaisyInstallation) e
 			Namespace:    di.GetNamespace(),
 			Installation: di.GetInstanceName(),
 			Clusters:     di.Spec.Configuration.Clusters,
+			Normalized:   *norm,
 		}
 
-		for name, cluster := range di.Spec.Configuration.Clusters {
+		for name, cluster := range norm.Spec.Configuration.Clusters {
 			ctx.CurCluster = name
 			if err := m.deleteCluster(ctx, di, &cluster); err != nil {
 				return err
@@ -225,15 +233,20 @@ func (m *DaisyMemberManager) deleteDaisyInstallation(di *v1.DaisyInstallation) e
 			return err
 		}
 
+		di.Status.State = v1.StatusCompleted
+		if err := UpdateInstallationStatus(m.deps.Client, di, true); err != nil {
+			if errors.IsConflict(err) {
+				log.V(1).Info("Conflict while updating status")
+				return k8s.RequeueErrorf("Conflict while updating status")
+			} else {
+				log.Error(err, "Fail to update status")
+				return err
+			}
+		}
+
 		// remove our finalizer from the list and update it.
 		di.SetFinalizers(util.RemoveFromArray(DaisyFinalizer, di.GetFinalizers()))
 		if err := m.deps.Client.Update(context.Background(), di); err != nil {
-			return err
-		}
-
-		di.Status.State = v1.StatusCompleted
-		if err := m.deps.Client.Status().Update(context.Background(), di); err != nil {
-			log.Error(err, "Fail to update status")
 			return err
 		}
 	}
@@ -344,8 +357,8 @@ func (m *DaisyMemberManager) deleteConfigMap(key client.ObjectKey) error {
 type getSvcFunc func() *corev1.Service
 
 func (m *DaisyMemberManager) syncService(ctx *memberContext, di *v1.DaisyInstallation, getSvcFn getSvcFunc) error {
-	ns := di.GetNamespace()
-	diName := di.GetName()
+	ns := ctx.Namespace
+	diName := ctx.Installation
 	// sync service for daisy installation
 	newSvc := getSvcFn()
 	oldSvcTmp := &corev1.Service{}
@@ -376,7 +389,6 @@ func (m *DaisyMemberManager) syncService(ctx *memberContext, di *v1.DaisyInstall
 	if !equal {
 		svc := *oldSvc
 		svc.Spec = newSvc.Spec
-		// TODO add unit test
 		err = k8s.SetServiceLastAppliedConfigAnnotation(&svc)
 		if err != nil {
 			return err
@@ -490,7 +502,8 @@ func (m *DaisyMemberManager) getNewReplicaService(ctx *memberContext, di *v1.Dai
 }
 
 // normalize method contruct a ClickHouseInstallation regarding the spec
-func (m *DaisyMemberManager) normalize(di *v1.DaisyInstallation) *v1.DaisyInstallation {
+func (m *DaisyMemberManager) normalize(di *v1.DaisyInstallation) *NormalizedSpec {
+	tmp := di.DeepCopy()
 	ns := di.GetNamespace()
 	diName := di.GetName()
 
@@ -499,8 +512,6 @@ func (m *DaisyMemberManager) normalize(di *v1.DaisyInstallation) *v1.DaisyInstal
 	defer log.V(3).Info("normalize() - end")
 
 	var withDefaultCluster bool
-
-	// TODO: to simplify the logic
 	if di == nil {
 		di = &v1.DaisyInstallation{}
 		withDefaultCluster = false
@@ -508,22 +519,18 @@ func (m *DaisyMemberManager) normalize(di *v1.DaisyInstallation) *v1.DaisyInstal
 		withDefaultCluster = true
 	}
 
-	di, err := m.normalizer.GetInstallationFromTemplate(di, withDefaultCluster)
+	norm, err := m.normalizer.GetInstallationFromTemplate(tmp, withDefaultCluster)
 	if err != nil {
 		//TODO: record event for the failure
 		log.Error(err, "FAILED to normalize DaisyInstallation")
 	}
 
-	return di
+	return norm
 }
 
-func (m *DaisyMemberManager) syncConfiguration(di *v1.DaisyInstallation, cfg *v1.Configuration) error {
-	//TODO: add logic for Zookeeper, Users, Settings, Files etal
-	ctx := &memberContext{
-		Namespace:    di.GetNamespace(),
-		Installation: di.GetInstanceName(),
-		Clusters:     di.Spec.Configuration.Clusters,
-	}
+func (m *DaisyMemberManager) syncConfiguration(ctx *memberContext, di *v1.DaisyInstallation) error {
+	cfg := ctx.Normalized.Spec.Configuration
+	ctx.Clusters = cfg.Clusters
 
 	for name, cluster := range cfg.Clusters {
 		ctx.CurCluster = name
@@ -613,7 +620,10 @@ func (m *DaisyMemberManager) syncShard(ctx *memberContext, di *v1.DaisyInstallat
 
 		for o, old := range oldReplicas {
 			if !newReplicas.Has(o) {
-				m.deleteReplica(ctx, di, &old)
+				if err = m.deleteReplica(ctx, di, &old); err != nil {
+					log.Error(err, "Delete replica fail", "Replica", old.Name)
+					return err
+				}
 			}
 		}
 	}
@@ -638,11 +648,9 @@ func (m *DaisyMemberManager) syncReplica(ctx *memberContext, di *v1.DaisyInstall
 		return stsSyncResult, err
 	}
 
-	if stsSyncResult, err = m.syncStatefulSetForDaisyCluster(ctx, di, replica); err != nil {
+	if stsSyncResult, err = m.syncStatefulSet(ctx, di, replica); err != nil {
 		return stsSyncResult, err
 	}
-
-	//TODO: sync PVs
 
 	if err := m.syncServiceForReplica(ctx, di, replica); err != nil {
 		return nil, err
@@ -664,21 +672,23 @@ func (m *DaisyMemberManager) syncReplica(ctx *memberContext, di *v1.DaisyInstall
 	return nil, nil
 }
 
-func (m *DaisyMemberManager) syncStatefulSetForDaisyCluster(ctx *memberContext, di *v1.DaisyInstallation, replica *v1.Replica) (*syncResult, error) {
+func (m *DaisyMemberManager) syncStatefulSet(ctx *memberContext, di *v1.DaisyInstallation, replica *v1.Replica) (*syncResult, error) {
 	log := m.deps.Log.WithValues("replica", replica.Name)
 	result := &syncResult{Action: ActionNone}
 
-	ns := di.GetNamespace()
-	dcName := di.GetName()
+	ns := ctx.Namespace
+	dcName := ctx.Installation
 	key := client.ObjectKey{
 		Namespace: ns,
 		Name:      replica.Name,
 	}
 	oldSetTmp := &apps.StatefulSet{}
 	var oldSet *apps.StatefulSet = nil
+
+	//TODO: Check actual statefulsets match expectations before applying any changes
 	err := m.deps.Client.Get(context.Background(), key, oldSetTmp)
 	if err != nil && !errors.IsNotFound(err) {
-		return result, fmt.Errorf("syncStatefulSetForDaisyCluster: failed to get sts %s for replica %s/%s, error: %s", replica.Name, ns, dcName, err)
+		return result, fmt.Errorf("syncStatefulSet: failed to get sts %s for replica %s/%s, error: %s", replica.Name, ns, dcName, err)
 	}
 	setNotExist := errors.IsNotFound(err)
 
@@ -691,7 +701,7 @@ func (m *DaisyMemberManager) syncStatefulSetForDaisyCluster(ctx *memberContext, 
 		return result, nil
 	}
 
-	newSet, err := getNewSetForDaisyCluster(ctx, di, replica)
+	newSet, err := getStatefulSetForReplica(ctx, di, replica)
 	if err != nil {
 		return result, err
 	}
@@ -743,6 +753,20 @@ func (m *DaisyMemberManager) syncStatefulSetForDaisyCluster(ctx *memberContext, 
 	//}
 
 	// Update StatefulSet
+	var recreate bool
+	if recreate, err = m.handleVolumeExpansion(di, newSet, oldSet, false); err != nil {
+		log.Error(err, "handle volume expansion fail")
+		return result, err
+	}
+
+	if recreate {
+		//TODO: support recreation in future, now revert the changed PVCs
+		//result.Action = ActionUpdate
+		//return result, k8s.RequeueErrorf("DaisyInstallation: [%s/%s], waiting for pvc expansion", ns, dcName, replica.Name)
+		log.V(2).Info("Ignore the VolumeClaimTemplates changes", "StatefulSet", newSet.Name)
+	}
+
+	// ignore Changes in PVC
 	if !k8s.StatefulSetEqual(newSet, oldSet) {
 		result.Action = ActionUpdate
 		if err = UpdateStatefulSet(m.deps.Client, di, newSet, oldSet); err != nil {
@@ -757,6 +781,167 @@ func (m *DaisyMemberManager) syncStatefulSetForDaisyCluster(ctx *memberContext, 
 
 	return result, err
 }
+
+func (m *DaisyMemberManager) handleVolumeExpansion(di *v1.DaisyInstallation, cur, old *apps.StatefulSet, validateStorageClass bool) (bool, error) {
+	// ensure there are no incompatible storage size modification
+	if err := ValidateClaimsStorageUpdate(
+		m.deps.Client,
+		old.Spec.VolumeClaimTemplates,
+		cur.Spec.VolumeClaimTemplates,
+		validateStorageClass); err != nil {
+		return false, err
+	}
+
+	// resize all PVCs that can be resized
+	err := resizePVCs(m.deps.Client, *cur, *old)
+	if err != nil {
+		return false, err
+	}
+
+	// schedule the StatefulSet for recreation if needed
+	if needsRecreate(*cur, *old) {
+		//TODO: re-create sts and restart pod in future, currently do not recreate sts
+		// a. (FileSystem based PV) When PV has been resized, the statefulset needs to be recreated to reflect the PVC changes
+		// b. (FileSystem based PV) To ensure the resized PV take effects, Pods of Sts need to be restarted
+		return true, annotateForRecreation(m.deps.Client, di, *old, cur.Spec.VolumeClaimTemplates)
+	}
+
+	return false, nil
+}
+
+// needsRecreate returns true if the StatefulSet needs to be re-created to account for volume expansion.
+func needsRecreate(expectedSset apps.StatefulSet, actualSset apps.StatefulSet) bool {
+	for _, expectedClaim := range expectedSset.Spec.VolumeClaimTemplates {
+		actualClaim := k8s.GetClaim(actualSset.Spec.VolumeClaimTemplates, expectedClaim.Name)
+		if actualClaim == nil {
+			continue
+		}
+		storageCmp := k8s.CompareStorageRequests(actualClaim.Spec.Resources, expectedClaim.Spec.Resources)
+		if storageCmp.Increase {
+			return true
+		}
+	}
+	return false
+}
+
+// resizePVCs updates the spec of all existing PVCs whose storage requests can be expanded,
+// according to their storage class and what's specified in the expected claim.
+// It returns an error if the requested storage size is incompatible with the PVC.
+func resizePVCs(
+	k8sClient client.Client,
+	expectedSset apps.StatefulSet,
+	actualSset apps.StatefulSet,
+) error {
+	// match each existing PVC with an expected claim, and decide whether the PVC should be resized
+	actualPVCs, err := k8s.RetrieveActualPVCs(k8sClient, actualSset)
+	if err != nil {
+		return err
+	}
+	for claimName, pvcs := range actualPVCs {
+		expectedClaim := k8s.GetClaim(expectedSset.Spec.VolumeClaimTemplates, claimName)
+		if expectedClaim == nil {
+			continue
+		}
+		for _, pvc := range pvcs {
+			storageCmp := k8s.CompareStorageRequests(pvc.Spec.Resources, expectedClaim.Spec.Resources)
+			if !storageCmp.Increase {
+				// not an increase, nothing to do
+				continue
+			}
+
+			newSize := expectedClaim.Spec.Resources.Requests.Storage()
+			log.Info("Resizing PVC storage requests. Depending on the volume provisioner, "+
+				"Pods may need to be manually deleted for the filesystem to be resized.",
+				"namespace", pvc.Namespace, "StatefulSet", expectedSset.Name, "pvc_name", pvc.Name,
+				"old_value", pvc.Spec.Resources.Requests.Storage().String(), "new_value", newSize.String())
+
+			pvc.Spec.Resources.Requests[corev1.ResourceStorage] = *newSize
+			if err := k8sClient.Update(context.Background(), &pvc); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// annotateForRecreation stores the StatefulSet spec with updated storage requirements
+// in an annotation of the Elasticsearch resource, to be recreated at the next reconciliation.
+func annotateForRecreation(
+	k8sClient client.Client,
+	di *v1.DaisyInstallation,
+	actualSset apps.StatefulSet,
+	expectedClaims []corev1.PersistentVolumeClaim,
+) error {
+	log.Info("Preparing StatefulSet re-creation to account for PVC resize",
+		"Namespace", di.Namespace, "Installation", di.Name, "StatefulSet", actualSset.Name)
+
+	//TODO: mark the sts as "recreate"
+	//actualSset.Spec.VolumeClaimTemplates = expectedClaims
+	//asJSON, err := json.Marshal(actualSset)
+	//if err != nil {
+	//	return err
+	//}
+	//if di.Annotations == nil {
+	//	di.Annotations = make(map[string]string, 1)
+	//}
+	//di.Annotations[RecreateStatefulSetAnnotationPrefix+actualSset.Name] = string(asJSON)
+	//
+	//return k8sClient.Update(context.Background(), di)
+	return nil
+}
+
+//// DeleteOrphanPVCs ensures PersistentVolumeClaims created for the given es resource are deleted
+//// when no longer used, since this is not done automatically by the StatefulSet controller.
+//// Related issue in the k8s repo: https://github.com/kubernetes/kubernetes/issues/55045
+//// PVCs that are not supposed to exist given the actual and expected StatefulSets are removed.
+//// This covers:
+//// * leftover PVCs created for StatefulSets that do not exist anymore
+//// * leftover PVCs created for StatefulSets replicas that don't exist anymore (eg. downscale from 5 to 3 nodes)
+//func (m *DaisyMemberManager) DeleteOrphanPVCs(
+//	ctx *memberContext,
+//	actualStatefulSets k8s.StatefulSetList,
+//	expectedStatefulSets k8s.StatefulSetList,
+//) error {
+//	// PVCs are using the same labels as their corresponding StatefulSet, so we can filter on ES cluster name.
+//	var pvcs corev1.PersistentVolumeClaimList
+//	ns := client.InNamespace(ctx.Namespace)
+//	matchLabels := client.MatchingLabels(labelInstallation(ctx).Labels())
+//	if err := m.deps.Client.List(context.Background(), &pvcs, ns, matchLabels); err != nil {
+//		return err
+//	}
+//	for _, pvc := range pvcsToRemove(pvcs.Items, actualStatefulSets, expectedStatefulSets) {
+//		log.Info("Deleting PVC", "Namespace", pvc.Namespace, "PVC", pvc.Name)
+//		if err := m.deps.Client.Delete(context.Background(), &pvc); err != nil {
+//			return err
+//		}
+//	}
+//	return nil
+//}
+//
+//// pvcsToRemove filters the given pvcs to ones that can be safely removed based on Pods
+//// of actual and expected StatefulSets.
+//func pvcsToRemove(
+//	pvcs []corev1.PersistentVolumeClaim,
+//	actualStatefulSets k8s.StatefulSetList,
+//	expectedStatefulSets k8s.StatefulSetList,
+//) []corev1.PersistentVolumeClaim {
+//	// Build the list of PVCs from both actual & expected StatefulSets (may contain duplicate entries).
+//	// The list may contain PVCs for Pods that do not exist (eg. not created yet), but does not
+//	// consider Pods in the process of being deleted (but not deleted yet), since already covered
+//	// by checking expectations earlier in the process.
+//	// Then, just return existing PVCs that are not part of that list.
+//
+//	keepSet := sets.NewString(actualStatefulSets.PVCNames()...)
+//	keepSet.Insert(expectedStatefulSets.PVCNames()...)
+//	var toRemove []corev1.PersistentVolumeClaim
+//	for _, pvc := range pvcs {
+//		if keepSet.Has(pvc.Name) {
+//			continue
+//		}
+//		toRemove = append(toRemove, pvc)
+//	}
+//	return toRemove
+//}
 
 func (m *DaisyMemberManager) syncRepliaStatus(ctx *memberContext, di *v1.DaisyInstallation, set *apps.StatefulSet, result *syncResult) error {
 	if set == nil {
@@ -825,7 +1010,7 @@ func (m *DaisyMemberManager) deleteServiceForInstallation(ctx *memberContext, di
 	log := m.deps.Log
 
 	svcName := CreateInstallationServiceName(di)
-	log.V(1).Info("Delete Service for replica", "Service", svcName)
+	log.V(1).Info("Delete Service for Installation", "Service", svcName)
 	key := client.ObjectKey{
 		Namespace: ctx.Namespace,
 		Name:      svcName,
@@ -936,6 +1121,7 @@ func (m *DaisyMemberManager) deleteReplica(ctx *memberContext, di *v1.DaisyInsta
 	// Need to delete all these item
 
 	var err error
+	//TODO: use Job to delete tables async
 	if err = m.deleteTables(ctx, r); err == nil {
 		m.deps.Recorder.Eventf(di, corev1.EventTypeNormal, "Deleting", "Delete Replicated* tables for Replica  %q", r.Name)
 	}
@@ -945,8 +1131,13 @@ func (m *DaisyMemberManager) deleteReplica(ctx *memberContext, di *v1.DaisyInsta
 	}
 	di.Status.DeletedReplicasCount++
 
-	//TODO: delete PVC
-	//_ = c.deletePVC(host)
+	//TODO: mark PVC for garbage collect in future to avoid Pod fail to schedule error
+	if di.Spec.PVReclaimPolicy == corev1.PersistentVolumeReclaimDelete {
+		if err = m.deletePVC(ctx, r); err != nil {
+			log.Error(err, "Delete PVC failed")
+			return err
+		}
+	}
 
 	cmKey := client.ObjectKey{
 		Namespace: ctx.Namespace,
@@ -961,13 +1152,40 @@ func (m *DaisyMemberManager) deleteReplica(ctx *memberContext, di *v1.DaisyInsta
 
 	// When deleting the whole CHI (not particular replica), daisy installation may already be unavailable, so update CHI tolerantly
 	if err == nil {
-		err = m.deps.Client.Status().Update(context.Background(), di)
+		if err = UpdateInstallationStatus(m.deps.Client, di, true); err != nil {
+			log.Info("Update Status fail", "error", err)
+			return err
+		}
 		log.Info("Delete Replica completed")
 	} else {
 		log.Error(err, "Fail to Delete Replica")
 	}
 
 	return err
+}
+
+// deletePVC deletes PersistentVolumeClaim
+func (m *DaisyMemberManager) deletePVC(ctx *memberContext, r *v1.Replica) error {
+	log := m.deps.Log.WithValues("Replica", r.Name)
+	log.V(2).Info("deletePVC() - start")
+	defer log.V(2).Info("deletePVC() - end")
+
+	// PVCs are using the same labels as their corresponding StatefulSet, so we can filter on ES cluster name.
+	var pvcs corev1.PersistentVolumeClaimList
+	ns := client.InNamespace(ctx.Namespace)
+	matchLabels := client.MatchingLabels(labelReplica(ctx, r).Labels())
+	if err := m.deps.Client.List(context.Background(), &pvcs, ns, matchLabels); err != nil {
+		return err
+	}
+
+	for _, pvc := range pvcs.Items {
+		log.Info("Deleting PVC", "Namespace", pvc.Namespace, "PVC", pvc.Name)
+		if err := m.deps.Client.Delete(context.Background(), &pvc); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (m *DaisyMemberManager) deleteStatefulSetForReplica(ctx *memberContext, di *v1.DaisyInstallation, r *v1.Replica) error {

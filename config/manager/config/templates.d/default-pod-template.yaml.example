@@ -1,0 +1,9 @@
+apiVersion: "daisy.com/v1"
+kind: "DaisyTemplate"
+metadata:
+  name: "default-oneperhost-pod-template"
+spec:
+  templates:
+    podTemplates:
+      - name: default-oneperhost-pod-template
+        distribution: "OnePerHost"

@@ -54,14 +54,6 @@ type DaisyInstallationSpec struct {
 	// Configuration include most settings of the installation
 	Configuration Configuration `json:"configuration"`
 
-	// Shard spec
-	// +kubebuilder:validation:Optional
-	//Daisy *DaisySpec `json:"shard,omitempty"`
-
-	// Helper spec
-	// +kubebuilder:validation:Optional
-	//Helper *HelperSpec `json:"helper,omitempty"`
-
 	// Indicates that the daisy cluster is paused and will not be processed by
 	// the controller.
 	// +kubebuilder:validation:Optional
@@ -69,7 +61,7 @@ type DaisyInstallationSpec struct {
 
 	// Persistent volume reclaim policy applied to the PVs that consumed by TiDB cluster
 	// +kubebuilder:default=Retain
-	PVReclaimPolicy *corev1.PersistentVolumeReclaimPolicy `json:"pvReclaimPolicy,omitempty"`
+	PVReclaimPolicy corev1.PersistentVolumeReclaimPolicy `json:"pvReclaimPolicy,omitempty"`
 
 	// ImagePullPolicy of TiDB cluster Pods
 	// +kubebuilder:default=IfNotPresent
@@ -79,31 +71,52 @@ type DaisyInstallationSpec struct {
 	// +kubebuilder:validation:Optional
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 
-	// Whether enable PVC reclaim for orphan PVC left by statefulset scale-in
-	// Optional: Defaults to false
-	// +kubebuilder:validation:Optional
-	EnablePVReclaim *bool `json:"enablePVReclaim,omitempty"`
-
-	// Affinity of TiDB cluster Pods
-	// +kubebuilder:validation:Optional
-	Affinity *corev1.Affinity `json:"affinity,omitempty"`
-
-	// PriorityClassName of TiDB cluster Pods
-	// Optional: Defaults to omitted
-	// +kubebuilder:validation:Optional
-	PriorityClassName *string `json:"priorityClassName,omitempty"`
-
-	// Base node selectors of Daisy cluster Pods, components may add or override selectors upon this respectively
-	// +kubebuilder:validation:Optional
-	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
-
 	// Base annotations of TiDB cluster Pods, components may add or override selectors upon this respectively
 	// +kubebuilder:validation:Optional
 	Annotations map[string]string `json:"annotations,omitempty"`
 
-	// Base tolerations of TiDB cluster Pods, components may add more tolerations upon this respectively
+	// Base tolerations of Daisy cluster Pods, components may add more tolerations upon this respectively
 	// +kubebuilder:validation:Optional
 	Tolerations []corev1.Toleration `json:"tolerations,omitempty"`
+
+	// Templates used by Daisy cluster pod, pvc
+	// +kubebuilder:validation:Optional
+	Templates Templates `json:"templates,omitempty"              yaml:"templates"`
+
+	// Default settings for Templates, DistributedDDL and other settings
+	// +kubebuilder:validation:Optional
+	Defaults Defaults `json:"defaults,omitempty"               yaml:"defaults"`
+
+	// UseTemplates, templates used by Installation
+	// +kubebuilder:validation:Optional
+	UseTemplates []UseTemplate `json:"useTemplates,omitempty"           yaml:"useTemplates"`
+}
+
+// UseTemplate defines UseTemplates section
+type UseTemplate struct {
+	Name      string `json:"name"      yaml:"name"`
+	Namespace string `json:"namespace" yaml:"namespace"`
+	UseType   string `json:"useType"   yaml:"useType"`
+}
+
+// Defaults defines defaults section of .spec
+type Defaults struct {
+	ReplicasUseFQDN string `json:"replicasUseFQDN,omitempty" yaml:"replicasUseFQDN"`
+	//DistributedDDL  ChiDistributedDDL `json:"distributedDDL,omitempty"  yaml:"distributedDDL"`
+	Templates TemplateNames `json:"templates,omitempty"       yaml:"templates"`
+}
+
+// Templates defines templates section of .spec
+type Templates struct {
+	// Templates
+	PodTemplates         []DaisyPodTemplate    `json:"podTemplates,omitempty"         yaml:"podTemplates"`
+	VolumeClaimTemplates []VolumeClaimTemplate `json:"volumeClaimTemplates,omitempty" yaml:"volumeClaimTemplates"`
+}
+
+// VolumeClaimTemplate defines PersistentVolumeClaim Template, directly used by StatefulSet
+type VolumeClaimTemplate struct {
+	Name string                           `json:"name"          yaml:"name"`
+	Spec corev1.PersistentVolumeClaimSpec `json:"spec"          yaml:"spec"`
 }
 
 // Configuration defines configuration section of .spec
@@ -150,13 +163,20 @@ type Shard struct {
 // Replica is either Up/Down/Offline/Tombstone
 type Replica struct {
 	// store id is also uint64, due to the same reason as pd id, we store id as string
-	ID       string        `json:"id"`
-	Name     string        `json:"name"`
-	Image    string        `json:"image,omitempty"`
-	Config   ReplicaConfig `json:"-"`
-	Settings Settings      `json:"settings,omitempty"`
-	Files    Settings      `json:"files,omitempty"`
-	//Templates           ChiTemplateNames `json:"templates,omitempty"`
+	ID        string        `json:"id"`
+	Name      string        `json:"name"`
+	Image     string        `json:"image,omitempty"`
+	Config    ReplicaConfig `json:"-"`
+	Settings  Settings      `json:"settings,omitempty"`
+	Files     Settings      `json:"files,omitempty"`
+	Templates TemplateNames `json:"templates,omitempty"`
+}
+
+// TemplateNames defines references to .spec.templates to be used on current level of cluster
+type TemplateNames struct {
+	PodTemplate             string `json:"podTemplate,omitempty"             yaml:"podTemplate"`
+	DataVolumeClaimTemplate string `json:"dataVolumeClaimTemplate,omitempty" yaml:"dataVolumeClaimTemplate"`
+	LogVolumeClaimTemplate  string `json:"logVolumeClaimTemplate,omitempty"  yaml:"logVolumeClaimTemplate"`
 }
 
 // ReplicaConfig defines additional data related to a replica
@@ -193,6 +213,8 @@ type DaisyInstallationStatus struct {
 	// Represents the latest available observations of a tidb cluster's state.
 	// +kubebuilder:validation:Optional
 	Conditions []DaisyClusterCondition `json:"conditions,omitempty"`
+
+	ExpectStatefulSets []appsv1.StatefulSet `json:"-"`
 }
 
 //ClusterStatus is status of Daisy Cluster

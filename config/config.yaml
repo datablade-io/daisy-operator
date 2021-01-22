@@ -1,0 +1,13 @@
+# Path to folder where ClickHouse configuration files common for all instances within CHI are located.
+chCommonConfigsPath: config.d
+
+# Path to folder where ClickHouse configuration files unique for each instance (host) within CHI are located.
+chHostConfigsPath: conf.d
+
+# Path to folder where ClickHouse configuration files with users settings are located.
+# Files are common for all instances within CHI
+chUsersConfigsPath: users.d
+
+# Path to folder where ClickHouseInstallation .yaml manifests are located.
+# Manifests are applied in sorted alpha-numeric order
+chiTemplatesPath: templates.d

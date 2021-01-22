@@ -28,8 +28,9 @@ import (
 
 // Normalizer
 type Normalizer struct {
-	di     *v1.DaisyInstallation
-	cfgMgr *ConfigManager
+	di         *v1.DaisyInstallation
+	normalized NormalizedSpec
+	cfgMgr     *ConfigManager
 	// Whether should insert default cluster if no cluster specified
 	withDefaultCluster bool
 }
@@ -42,35 +43,70 @@ func NewNormalizer(mgr *ConfigManager) *Normalizer {
 }
 
 // GetInstallationFromTemplate produces ready-to-use DaisyInstallation object
-func (n *Normalizer) GetInstallationFromTemplate(di *v1.DaisyInstallation, withDefaultCluster bool) (*v1.DaisyInstallation, error) {
+func (n *Normalizer) GetInstallationFromTemplate(di *v1.DaisyInstallation, withDefaultCluster bool) (*NormalizedSpec, error) {
 	// Whether should insert default cluster if no cluster specified
 	n.withDefaultCluster = withDefaultCluster
 
-	n.di = new(v1.DaisyInstallation)
+	// What base should be used to create CHI
+	if n.cfgMgr.Config().CHITemplate == nil {
+		// No template specified - start with clear page
+		n.di = new(v1.DaisyInstallation)
+	} else {
+		// Template specified - start with template
+		n.di = n.cfgMgr.Config().CHITemplate.DeepCopy()
+	}
+
+	// At this moment n.chi is either empty CHI or a system-wide template
+	// We need to apply templates
+
+	var useTemplates []v1.UseTemplate
+	if len(di.Spec.UseTemplates) > 0 {
+		useTemplates = make([]v1.UseTemplate, len(di.Spec.UseTemplates))
+		copy(useTemplates, di.Spec.UseTemplates)
+
+		// UseTemplates must contain reasonable data, thus has to be normalized
+		//n.normalizeUseTemplates(&useTemplates)
+	}
+
+	for i := range useTemplates {
+		useTemplate := &useTemplates[i]
+		var template *v1.DaisyInstallation = nil
+		if template = n.cfgMgr.Config().FindTemplate(useTemplate, di.Namespace); template == nil {
+			// Try to find in k8s
+			if template = n.cfgMgr.FetchTemplate(useTemplate, di.Namespace); template == nil {
+				log.V(1).Info("UNABLE to find template referenced in useTemplates. Skip it.", "Namespace", di.Namespace, "Template", useTemplate.Name)
+			}
+		}
+		if template != nil {
+			(&n.di.Spec).MergeFrom(&template.Spec, v1.MergeTypeOverrideByNonEmptyValues)
+			log.V(2).Info("Merge template %s/%s referenced in useTemplates", "Namespace", di.Namespace, "Template", useTemplate.Name)
+		}
+	}
 
 	// After all templates applied, place provided CHI on top of the whole stack
 	n.di.MergeFrom(di, v1.MergeTypeOverrideByNonEmptyValues)
-
-	return n.NormalizeInstallation(di)
-}
-
-func (n *Normalizer) NormalizeInstallation(di *v1.DaisyInstallation) (*v1.DaisyInstallation, error) {
-	if di != nil {
-		n.di = di
+	n.normalized = NormalizedSpec{
+		Spec:                 *n.di.Spec.DeepCopy(),
+		VolumeClaimTemplates: make(map[string]*v1.VolumeClaimTemplate),
+		PodTemplates:         make(map[string]*v1.DaisyPodTemplate),
 	}
 
+	return n.normalizeInstallation(n.di)
+}
+
+func (n *Normalizer) normalizeInstallation(di *v1.DaisyInstallation) (*NormalizedSpec, error) {
 	// Walk over Spec datatype fields
 	// TODO: get delete-slots from ObjectMeta
 	//deleteSlots := helper.GetDeleteSlots(chi)
+
 	//n.normalizeStop(&n.chi.Spec.Stop)
 	n.normalizeConfiguration(di, &n.di.Spec.Configuration)
+	n.normalizeTemplates(&di.Spec.Templates)
 
 	//n.finalizeCHI()
-	if n.di != nil {
-		n.di.FillStatus()
-	}
 
-	return n.di, nil
+	n.normalized.Spec = *n.di.Spec.DeepCopy()
+	return &n.normalized, nil
 }
 
 // normalizeConfiguration normalizes .spec.configuration
@@ -537,8 +573,171 @@ func (n *Normalizer) normalizeReplica(replica *v1.Replica, shard *v1.Shard, clus
 	n.normalizeConfigurationSettings(&replica.Settings)
 	replica.InheritFilesFrom(shard)
 	n.normalizeConfigurationSettings(&replica.Files)
-	//replica.InheritTemplatesFrom(cluster)
-	// Normalize Shards
+	(&replica.Templates).MergeFrom(&n.normalized.Spec.Defaults.Templates, v1.MergeTypeFillEmptyValues)
+}
+
+// normalizeTemplates normalizes .spec.templates
+func (n *Normalizer) normalizeTemplates(templates *v1.Templates) {
+	//for i := range templates.HostTemplates {
+	//	hostTemplate := &templates.HostTemplates[i]
+	//	n.normalizeHostTemplate(hostTemplate)
+	//}
+
+	for i := range templates.PodTemplates {
+		podTemplate := &templates.PodTemplates[i]
+		n.normalizePodTemplate(podTemplate)
+	}
+
+	for i := range templates.VolumeClaimTemplates {
+		vcTemplate := &templates.VolumeClaimTemplates[i]
+		n.normalizeVolumeClaimTemplate(vcTemplate)
+	}
+
+	//for i := range templates.ServiceTemplates {
+	//	serviceTemplate := &templates.ServiceTemplates[i]
+	//	n.normalizeServiceTemplate(serviceTemplate)
+	//}
+}
+
+// normalizePodTemplate normalizes .spec.templates.podTemplates
+func (n *Normalizer) normalizePodTemplate(template *v1.DaisyPodTemplate) {
+	// Name
+
+	//// Zone
+	//if len(template.Zone.Values) == 0 {
+	//	// In case no values specified - no key is reasonable
+	//	template.Zone.Key = ""
+	//} else if template.Zone.Key == "" {
+	//	// We have values specified, but no key
+	//	// Use default zone key in this case
+	//	template.Zone.Key = "failure-domain.beta.kubernetes.io/zone"
+	//} else {
+	//	// We have both key and value(s) specified explicitly
+	//}
+	//
+	//// Distribution
+	//if template.Distribution == chiv1.PodDistributionOnePerHost {
+	//	// Known distribution, all is fine
+	//} else {
+	//	// Default Pod Distribution
+	//	template.Distribution = chiv1.PodDistributionUnspecified
+	//}
+
+	//// PodDistribution
+	//for i := range template.PodDistribution {
+	//	podDistribution := &template.PodDistribution[i]
+	//	switch podDistribution.Type {
+	//	case
+	//		chiv1.PodDistributionUnspecified,
+	//
+	//		// AntiAffinity section
+	//		chiv1.PodDistributionClickHouseAntiAffinity,
+	//		chiv1.PodDistributionShardAntiAffinity,
+	//		chiv1.PodDistributionReplicaAntiAffinity:
+	//		if podDistribution.Scope == "" {
+	//			podDistribution.Scope = chiv1.PodDistributionScopeCluster
+	//		}
+	//	case
+	//		chiv1.PodDistributionAnotherNamespaceAntiAffinity,
+	//		chiv1.PodDistributionAnotherClickHouseInstallationAntiAffinity,
+	//		chiv1.PodDistributionAnotherClusterAntiAffinity:
+	//		// PodDistribution is known
+	//	case
+	//		chiv1.PodDistributionMaxNumberPerNode:
+	//		// PodDistribution is known
+	//		if podDistribution.Number < 0 {
+	//			podDistribution.Number = 0
+	//		}
+	//	case
+	//		// Affinity section
+	//		chiv1.PodDistributionNamespaceAffinity,
+	//		chiv1.PodDistributionClickHouseInstallationAffinity,
+	//		chiv1.PodDistributionClusterAffinity,
+	//		chiv1.PodDistributionShardAffinity,
+	//		chiv1.PodDistributionReplicaAffinity,
+	//		chiv1.PodDistributionPreviousTailAffinity:
+	//		// PodDistribution is known
+	//
+	//	case chiv1.PodDistributionCircularReplication:
+	//		// Shortcut section
+	//		// All shortcuts have to be expanded
+	//
+	//		// PodDistribution is known
+	//
+	//		if podDistribution.Scope == "" {
+	//			podDistribution.Scope = chiv1.PodDistributionScopeCluster
+	//		}
+	//
+	//		// TODO need to support multi-cluster
+	//		cluster := &n.chi.Spec.Configuration.Clusters[0]
+	//
+	//		template.PodDistribution = append(template.PodDistribution, chiv1.ChiPodDistribution{
+	//			Type:  chiv1.PodDistributionShardAntiAffinity,
+	//			Scope: podDistribution.Scope,
+	//		})
+	//		template.PodDistribution = append(template.PodDistribution, chiv1.ChiPodDistribution{
+	//			Type:  chiv1.PodDistributionReplicaAntiAffinity,
+	//			Scope: podDistribution.Scope,
+	//		})
+	//		template.PodDistribution = append(template.PodDistribution, chiv1.ChiPodDistribution{
+	//			Type:   chiv1.PodDistributionMaxNumberPerNode,
+	//			Scope:  podDistribution.Scope,
+	//			Number: cluster.Layout.ReplicasCount,
+	//		})
+	//
+	//		template.PodDistribution = append(template.PodDistribution, chiv1.ChiPodDistribution{
+	//			Type: chiv1.PodDistributionPreviousTailAffinity,
+	//		})
+	//
+	//		template.PodDistribution = append(template.PodDistribution, chiv1.ChiPodDistribution{
+	//			Type: chiv1.PodDistributionNamespaceAffinity,
+	//		})
+	//		template.PodDistribution = append(template.PodDistribution, chiv1.ChiPodDistribution{
+	//			Type: chiv1.PodDistributionClickHouseInstallationAffinity,
+	//		})
+	//		template.PodDistribution = append(template.PodDistribution, chiv1.ChiPodDistribution{
+	//			Type: chiv1.PodDistributionClusterAffinity,
+	//		})
+	//
+	//	default:
+	//		// PodDistribution is not known
+	//		podDistribution.Type = chiv1.PodDistributionUnspecified
+	//	}
+	//}
+
+	//// Spec
+	//template.Spec.Affinity = n.mergeAffinity(template.Spec.Affinity, n.newAffinity(template))
+	//
+	//// In case we have hostNetwork specified, we need to have ClusterFirstWithHostNet DNS policy, because of
+	//// https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-s-dns-policy
+	//// which tells:  For Pods running with hostNetwork, you should explicitly set its DNS policy “ClusterFirstWithHostNet”.
+	//if template.Spec.HostNetwork {
+	//	template.Spec.DNSPolicy = v1.DNSClusterFirstWithHostNet
+	//}
+
+	// Introduce PodTemplate into Index
+	// Ensure map is in place
+	if n.normalized.PodTemplates == nil {
+		n.normalized.PodTemplates = make(map[string]*v1.DaisyPodTemplate)
+	}
+
+	n.normalized.PodTemplates[template.Name] = template
+}
+
+// normalizeVolumeClaimTemplate normalizes .spec.templates.volumeClaimTemplates
+func (n *Normalizer) normalizeVolumeClaimTemplate(template *v1.VolumeClaimTemplate) {
+	// Check name
+	// Check PVCReclaimPolicy
+	//if !template.PVCReclaimPolicy.IsValid() {
+	//	template.PVCReclaimPolicy = v1.PVCReclaimPolicyDelete
+	//}
+	// Check Spec
+
+	// Ensure map is in place
+	if n.normalized.VolumeClaimTemplates == nil {
+		n.normalized.VolumeClaimTemplates = make(map[string]*v1.VolumeClaimTemplate)
+	}
+	n.normalized.VolumeClaimTemplates[template.Name] = template
 }
 
 func getNextIndex(index int, skip sets.Int) int {

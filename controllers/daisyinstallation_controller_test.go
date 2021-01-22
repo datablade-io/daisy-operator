@@ -47,7 +47,7 @@ var _ = Describe("DaisyInstallation Controller", func() {
 					},
 				},
 				ImagePullPolicy: corev1.PullIfNotPresent,
-				PVReclaimPolicy: &retainPVP,
+				PVReclaimPolicy: retainPVP,
 			}
 			di := &v1.DaisyInstallation{
 				ObjectMeta: metav1.ObjectMeta{

@@ -17,22 +17,24 @@ limitations under the License.
 package controllers
 
 import (
-	"github.com/daisy/daisy-operator/controllers/daisymanager"
 	"path/filepath"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"testing"
+
+	ctrl "sigs.k8s.io/controller-runtime"
+
+	"github.com/daisy/daisy-operator/controllers/daisymanager"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes/scheme"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	daisycomv1 "github.com/daisy/daisy-operator/api/v1"
 	v1 "github.com/daisy/daisy-operator/api/v1"
 	// +kubebuilder:scaffold:imports
 )
@@ -40,7 +42,6 @@ import (
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
-var cfg *rest.Config
 var k8sClient client.Client
 var testEnv *envtest.Environment
 
@@ -69,6 +70,9 @@ var _ = BeforeSuite(func() {
 	err = v1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
+	err = daisycomv1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
 	// +kubebuilder:scaffold:scheme
 
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
@@ -82,8 +86,12 @@ var _ = BeforeSuite(func() {
 		Recorder: mgr.GetEventRecorderFor("DaisyController"),
 	}
 	var dmm daisymanager.Manager
+	var cfgMgr *daisymanager.ConfigManager
 	configPath := ""
-	dmm, err = daisymanager.NewDaisyMemberManager(deps, configPath)
+
+	cfgMgr, err = daisymanager.NewConfigManager(deps.Client, configPath)
+	Expect(err).ToNot(HaveOccurred())
+	dmm, err = daisymanager.NewDaisyMemberManager(deps, cfgMgr)
 	Expect(err).ToNot(HaveOccurred())
 
 	err = (&DaisyInstallationReconciler{

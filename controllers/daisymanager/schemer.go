@@ -275,7 +275,10 @@ func (s *Schemer) DeleteTablesForReplica(namespace string, r *v1.Replica) error 
 	log := s.Log
 	tableNames, dropTableSQLs, _ := s.replicaGetDropTables(namespace, r)
 	log.V(1).Info("Drop tables", "Table", tableNames, "SQL", dropTableSQLs)
-	return s.replicaApplySQLs(namespace, r, dropTableSQLs, false)
+	if len(tableNames) > 0 {
+		return s.replicaApplySQLs(namespace, r, dropTableSQLs, false)
+	}
+	return nil
 }
 
 // CreateTablesForReplica

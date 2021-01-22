@@ -110,6 +110,22 @@ func (cm *ConfigManager) Config() *v1.DaisyOperatorConfigurationSpec {
 	return cm.config
 }
 
+func (cm *ConfigManager) FetchTemplate(use *v1.UseTemplate, namespace string) *v1.DaisyInstallation {
+	dt := v1.DaisyTemplate{}
+	key := client.ObjectKey{
+		Namespace: namespace,
+		Name:      use.Name,
+	}
+
+	if err := cm.Client.Get(context.Background(), key, &dt); err != nil {
+		return nil
+	}
+
+	di := v1.DaisyInstallation(dt)
+	cm.Config().EnlistDaisyTemplate(&di)
+	return &di
+}
+
 // getCRBasedConfigs reads all ClickHouseOperatorConfiguration objects in specified namespace
 func (cm *ConfigManager) getCRBasedConfigs(namespace string) {
 	// We need to have chop kube client available in order to fetch ClickHouseOperatorConfiguration objects

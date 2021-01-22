@@ -3,12 +3,21 @@ package daisymanager
 import (
 	"context"
 	"fmt"
+	"github.com/daisy/daisy-operator/pkg/daisy"
 	"github.com/daisy/daisy-operator/pkg/k8s"
+	"github.com/go-logr/logr"
 	. "github.com/onsi/gomega"
 	apps "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apiextensions-apiserver/examples/client-go/pkg/client/clientset/versioned/scheme"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/record"
+	"os"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/daisy/daisy-operator/api/v1"
 	"github.com/daisy/daisy-operator/pkg/label"
@@ -74,10 +83,21 @@ func newChecker(di *v1.DaisyInstallation, g *GomegaWithT) *checker {
 	}
 }
 
-func (c *checker) verifyReplicas(sets []apps.StatefulSet) {
-	for _, set := range sets {
+func (c *checker) verifyReplicas(cli client.Client) {
+	sets := apps.StatefulSetList{}
+	err := cli.List(context.Background(), &sets, client.InNamespace("default"))
+	c.g.Expect(err).Should(BeNil())
+	for _, set := range sets.Items {
 		c.checkStatefulSet(&set)
 	}
+}
+
+func (c *checker) verifyAnyReplica(cli client.Client, fn func(set *apps.StatefulSet, g *GomegaWithT)) {
+	sets := apps.StatefulSetList{}
+	err := cli.List(context.Background(), &sets, client.InNamespace("default"))
+	c.g.Expect(err).Should(BeNil())
+	c.g.Expect(len(sets.Items) > 0).Should(BeTrue())
+	fn(&sets.Items[0], c.g)
 }
 
 func (c *checker) checkStatefulSet(set *apps.StatefulSet) {
@@ -94,9 +114,9 @@ func (c *checker) checkServiceCount(cli client.Client, expect int) {
 
 func (c *checker) checkConfigMapCount(cli client.Client, expect int) {
 	cms := corev1.ConfigMapList{}
-	c.g.Expect(cli.List(context.Background(), &cms, client.InNamespace(c.ctx.Namespace))).
+	c.g.ExpectWithOffset(1, cli.List(context.Background(), &cms, client.InNamespace(c.ctx.Namespace))).
 		Should(Succeed())
-	c.g.Expect(len(cms.Items)).To(Equal(expect))
+	c.g.ExpectWithOffset(1, len(cms.Items)).To(Equal(expect))
 }
 
 func (c *checker) checkStatefulSetCount(cli client.Client, expect int) {
@@ -149,24 +169,80 @@ func updateAllStsToReady(cli client.Client, di *v1.DaisyInstallation, g *GomegaW
 func prepareResourceForInstallation(m *DaisyMemberManager, di *v1.DaisyInstallation, toComplete bool, g *GomegaWithT) {
 	err := k8s.RequeueErrorf("")
 	for err != nil && k8s.IsRequeueError(err) {
-		err = m.Sync(nil, di)
+		err = m.Sync(di)
 	}
 
 	if toComplete {
 		updateAllStsToReady(m.deps.Client, di, g)
-		g.Expect(m.Sync(di, di)).Should(Succeed())
+		g.Expect(m.Sync(di)).Should(Succeed())
 		g.Expect(di.Status.State).To(Equal(v1.StatusCompleted))
 	}
 }
 
 func runSync(m *DaisyMemberManager, old, cur *v1.DaisyInstallation, notOnce bool) {
 	if !notOnce {
-		m.Sync(old, cur)
+		m.Sync(cur)
 	} else {
 		err := k8s.RequeueErrorf("")
 		for err != nil && k8s.IsRequeueError(err) {
-			err = m.Sync(old, cur)
-			old = cur
+			err = m.Sync(cur)
 		}
 	}
+}
+
+func newFakeDaisyMemberManager(initObjs ...runtime.Object) (dmm *DaisyMemberManager, fakeClient client.Client) {
+	// Register operator types with the runtime scheme.
+
+	_ = clientgoscheme.AddToScheme(scheme.Scheme)
+
+	if err := v1.AddToScheme(scheme.Scheme); err != nil {
+		fmt.Printf("error: %v", err)
+	}
+
+	// Create a fake client to mock API calls.
+	cl := fake.NewFakeClientWithScheme(scheme.Scheme, initObjs...)
+
+	fakeDeps := &Dependencies{
+		Client:   cl,
+		Log:      ctrl.Log.WithName("daisy_member_manager_test"),
+		Recorder: record.NewFakeRecorder(100),
+	}
+
+	var cfgPath = "../../config/manager/config/config.yaml"
+	if path, err := os.Getwd(); err == nil {
+		cfgPath = fmt.Sprintf("%s/%s", path, cfgPath)
+	}
+	//fmt.Printf("path is %s", cfgPath)
+
+	cfgMgr, err := NewConfigManager(fakeDeps.Client, cfgPath)
+	if err != nil {
+		return nil, nil
+	}
+	schemer, _ := NewFakeSchemer(
+		cfgMgr.Config().CHUsername,
+		cfgMgr.Config().CHPassword,
+		cfgMgr.Config().CHPort,
+		fakeDeps.Log.WithName("schemer"))
+	dmm = &DaisyMemberManager{
+		deps:       fakeDeps,
+		normalizer: NewNormalizer(cfgMgr),
+		cfgMgr:     cfgMgr,
+		cfgGen:     nil,
+		schemer:    schemer,
+	}
+
+	return dmm, fakeDeps.Client
+}
+
+func NewFakeSchemer(username, password string, port int, logger logr.Logger) (*Schemer, *daisy.FakeConnection) {
+	fakeConnection := daisy.NewFakeConnection()
+	return &Schemer{
+		Username: username,
+		Password: password,
+		Port:     port,
+		Log:      logger.WithName("schemer"),
+		Pool: &daisy.FakeConnectionPool{
+			Conn: fakeConnection,
+		},
+	}, fakeConnection
 }

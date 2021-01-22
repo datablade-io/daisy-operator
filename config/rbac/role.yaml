@@ -90,3 +90,29 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - daisy.com
+  resources:
+  - daisytemplates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - daisy.com
+  resources:
+  - daisytemplates/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - daisy.com
+  resources:
+  - daisytemplates/status
+  verbs:
+  - get
+  - patch
+  - update

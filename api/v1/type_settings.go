@@ -24,8 +24,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-
-	log "k8s.io/klog/v2"
 )
 
 const (
@@ -177,7 +175,7 @@ func unmarshalScalar(untyped interface{}) (string, bool) {
 	typeOf := reflect.TypeOf(untyped)
 	if typeOf == nil {
 		// Unable to determine type of the value
-		log.V(3).Infof("unmarshalScalar() typeOf==nil")
+		log.V(3).Info("unmarshalScalar() typeOf==nil")
 		return "", false
 	}
 
@@ -222,10 +220,10 @@ func unmarshalScalar(untyped interface{}) (string, bool) {
 
 	str := typeOf.String()
 	if knownType {
-		log.V(3).Infof("unmarshalScalar() type=%v value=%s", str, res)
+		log.V(3).Info("unmarshalScalar()", "type", str, "value", res)
 		return res, true
 	} else {
-		log.V(3).Infof("unmarshalScalar() type=%v - UNABLE to unmarshal", str)
+		log.V(3).Info("unmarshalScalar() - UNABLE to unmarshal", "type", str)
 		return "", false
 	}
 }
@@ -238,7 +236,7 @@ func unmarshalVector(untyped interface{}) ([]string, bool) {
 	typeOf := reflect.TypeOf(untyped)
 	if typeOf == nil {
 		// Unable to determine type of the value
-		log.V(3).Infof("unmarshalVector() typeOf==nil")
+		log.V(3).Info("unmarshalVector() typeOf==nil")
 		return nil, false
 	}
 
@@ -255,10 +253,10 @@ func unmarshalVector(untyped interface{}) ([]string, bool) {
 
 	str := typeOf.String()
 	if knownType {
-		log.V(3).Infof("unmarshalVector() type=%v value=%s", str, res)
+		log.V(3).Info("unmarshalVector() type=%v value=%s", "type", str, "value", res)
 		return res, true
 	} else {
-		log.V(3).Infof("unmarshalVector type=%v - UNABLE to unmarshal", str)
+		log.V(3).Info("unmarshalVector type=%v - UNABLE to unmarshal", "type", str)
 		return nil, false
 	}
 }
@@ -535,7 +533,7 @@ func string2Section(section string) (SettingsSection, error) {
 		return SectionHost, nil
 	}
 
-	log.V(1).Infof("unknown section specified %v", section)
+	log.V(1).Info("unknown section specified", "section", section)
 
 	return SectionEmpty, fmt.Errorf("unknown section specified %v", section)
 }
