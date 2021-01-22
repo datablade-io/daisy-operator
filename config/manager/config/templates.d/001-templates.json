@@ -1,0 +1,53 @@
+{
+  "apiVersion": "daisy.com/v1",
+  "kind": "DaisyTemplate",
+  "metadata": {
+    "name": "01-default-volumeclaimtemplate"
+  },
+  "spec": {
+    "templates": {
+      "volumeClaimTemplates": [
+        {
+          "name": "default-volume-claim-template",
+          "spec": {
+            "accessModes": [
+              "ReadWriteOnce"
+            ],
+            "resources": {
+              "requests": {
+                "storage": "2Gi"
+              }
+            }
+          }
+        }
+      ],
+      "podTemplates": [
+        {
+          "name": "default-oneperhost-pod-template",
+          "spec": {
+            "containers" : [
+              {
+                "name": "clickhouse",
+                "image": "yandex/clickhouse-server:19.3.7",
+                "ports": [
+                  {
+                    "name": "http",
+                    "containerPort": 8123
+                  },
+                  {
+                    "name": "client",
+                    "containerPort": 9000
+                  },
+                  {
+                    "name": "interserver",
+                    "containerPort": 9009
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

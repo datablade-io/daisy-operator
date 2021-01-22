@@ -78,16 +78,3 @@ func TestSchemer_ReplicaCreateTables(t *testing.T) {
 		})
 	}
 }
-
-func NewFakeSchemer(username, password string, port int, logger logr.Logger) (*Schemer, *daisy.FakeConnection) {
-	fakeConnection := daisy.NewFakeConnection()
-	return &Schemer{
-		Username: username,
-		Password: password,
-		Port:     port,
-		Log:      logger.WithName("schemer"),
-		Pool: &daisy.FakeConnectionPool{
-			Conn: fakeConnection,
-		},
-	}, fakeConnection
-}

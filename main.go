@@ -18,9 +18,11 @@ package main
 
 import (
 	"flag"
-	"github.com/daisy/daisy-operator/controllers/daisymanager"
-	"github.com/spf13/pflag"
 	"os"
+
+	"github.com/spf13/pflag"
+
+	"github.com/daisy/daisy-operator/controllers/daisymanager"
 
 	v1 "github.com/daisy/daisy-operator/api/v1"
 	"github.com/daisy/daisy-operator/controllers"
@@ -29,6 +31,7 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	daisycomv1 "github.com/daisy/daisy-operator/api/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -47,6 +50,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(v1.AddToScheme(scheme))
+	utilruntime.Must(daisycomv1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -107,7 +111,13 @@ func main() {
 		Recorder: mgr.GetEventRecorderFor("DaisyController"),
 	}
 	var dmm daisymanager.Manager
-	if dmm, err = daisymanager.NewDaisyMemberManager(deps, configPath); err != nil {
+	var cfgMgr *daisymanager.ConfigManager
+	if cfgMgr, err = daisymanager.NewConfigManager(deps.Client, configPath); err != nil {
+		setupLog.Error(err, "unable to create config manager", "configPath", configPath)
+		os.Exit(1)
+	}
+
+	if dmm, err = daisymanager.NewDaisyMemberManager(deps, cfgMgr); err != nil {
 		setupLog.Error(err, "unable to create daisy member manager", "configPath", configPath)
 		os.Exit(1)
 	}
@@ -127,6 +137,16 @@ func main() {
 	//	setupLog.Error(err, "unable to create webhook", "webhook", "DaisyInstallation")
 	//	os.Exit(1)
 	//}
+
+	if err = (&controllers.DaisyTemplateReconciler{
+		Client: mgr.GetClient(),
+		CfgMgr: cfgMgr,
+		Log:    ctrl.Log.WithName("controllers").WithName("DaisyTemplate"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "DaisyTemplate")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("health", healthz.Ping); err != nil {

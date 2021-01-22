@@ -1,0 +1,23 @@
+apiVersion: "daisy.com/v1"
+kind: "DaisyTemplate"
+metadata:
+  name: "template01"
+spec:
+  templates:
+    volumeClaimTemplates:
+      - name: data-volume-template
+        spec:
+          storageClassName: standard
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 1Gi
+      - name: log-volume-template
+        spec:
+          storageClassName: standard
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 100Mi

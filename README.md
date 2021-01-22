@@ -1,7 +1,8 @@
 ## Dependencies
 
-Go 1.15+
-operator-sdk
+- Go 1.15+
+- operator-sdk 1.3.0
+- kubernetes 1.15+ (support PVC expasion)
 
 ## Generate client & crds & other yaml files
 ```

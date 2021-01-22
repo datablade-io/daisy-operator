@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	v1 "github.com/daisy/daisy-operator/api/v1"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
@@ -63,6 +62,11 @@ func GetInstallationLastAppliedSpec(di *v1.DaisyInstallation) (*v1.DaisyInstalla
 	return instSpec, nil
 }
 
+// GetLastAppliedNormalizedSpec return last applied normalized spec from DaisyInstallation's status
+func GetLastAppliedNormalizedSpec(di *v1.DaisyInstallation) *v1.DaisyInstallationSpec {
+	return di.Status.PrevSpec.DeepCopy()
+}
+
 // DeploymentPodSpecChanged checks whether the new deployment differs with the old one's last-applied-config
 func DeploymentPodSpecChanged(newDep *appsv1.Deployment, oldDep *appsv1.Deployment) bool {
 	lastAppliedPodTemplate, err := GetDeploymentLastAppliedPodTemplate(oldDep)
@@ -87,7 +91,7 @@ func SetServiceLastAppliedConfigAnnotation(svc *corev1.Service) error {
 }
 
 // SetInstallationLastAppliedConfigAnnotation set last applied config info to Service's annotation
-func SetInstallationLastAppliedConfigAnnotation(di *v1.DaisyInstallation) error {
+func SetInstallationLastAppliedConfigAnnotation(di *v1.DaisyInstallation, spec *v1.DaisyInstallationSpec) error {
 	b, err := json.Marshal(di.Spec)
 	if err != nil {
 		return err
@@ -96,7 +100,8 @@ func SetInstallationLastAppliedConfigAnnotation(di *v1.DaisyInstallation) error 
 		di.Annotations = map[string]string{}
 	}
 	di.Annotations[LastAppliedConfigAnnotation] = string(b)
-	di.Status.PrevSpec = di.Spec
+	//normalized spec
+	di.Status.PrevSpec = *spec
 	return nil
 }
 
@@ -127,7 +132,8 @@ func ServiceEqual(newSvc, oldSvc *corev1.Service) (bool, error) {
 	return false, nil
 }
 
-// statefulSetEqual compares the new Statefulset's spec with old Statefulset's last applied config
+// StatefulSetEqual compares the new Statefulset's spec with old Statefulset's last applied config
+// which will ignore the changes of .Spec.VolumeClaimTemplates
 func StatefulSetEqual(new *appsv1.StatefulSet, old *appsv1.StatefulSet) bool {
 	// The annotations in old sts may include LastAppliedConfigAnnotation
 	tmpAnno := map[string]string{}
@@ -183,4 +189,27 @@ func IngressEqual(newIngress, oldIngres *extensionsv1beta1.Ingress) (bool, error
 		return apiequality.Semantic.DeepEqual(oldIngressSpec, newIngress.Spec), nil
 	}
 	return false, nil
+}
+
+type StorageComparison struct {
+	Increase bool
+	Decrease bool
+}
+
+// CompareStorageRequests compares storage requests in the given resource requirements.
+// It returns a zero-ed StorageComparison in case one of the requests is zero (value not set: comparison not possible).
+func CompareStorageRequests(initial corev1.ResourceRequirements, updated corev1.ResourceRequirements) StorageComparison {
+	initialSize := initial.Requests.Storage()
+	updatedSize := updated.Requests.Storage()
+	if initialSize.IsZero() || updatedSize.IsZero() {
+		return StorageComparison{}
+	}
+	switch updatedSize.Cmp(*initialSize) {
+	case -1: // decrease
+		return StorageComparison{Decrease: true}
+	case 1: // increase
+		return StorageComparison{Increase: true}
+	default: // same size
+		return StorageComparison{}
+	}
 }

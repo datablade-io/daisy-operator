@@ -83,9 +83,8 @@ def create_and_check(config, check, ns=namespace, timeout=30):
 
     if "chi_status" in check:
         wait_chi_status(chi_name, check["chi_status"], ns)
-    # TODO: check status.status
-    # else:
-    #     wait_chi_status(chi_name, "Completed", ns)
+    else:
+        wait_chi_status(chi_name, "Completed", ns)
 
     if "pod_image" in check:
         check_pod_image(chi_name, check["pod_image"], ns)

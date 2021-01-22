@@ -30,6 +30,20 @@ import (
 )
 
 const (
+	// CommonConfigDir specifies folder's name, where generated common XML files for ClickHouse would be placed
+	CommonConfigDir = "config.d"
+
+	// UsersConfigDir specifies folder's name, where generated users XML files for ClickHouse would be placed
+	UsersConfigDir = "users.d"
+
+	// HostConfigDir specifies folder's name, where generated host XML files for ClickHouse would be placed
+	HostConfigDir = "conf.d"
+
+	// TemplatesDir specifies folder's name where ClickHouseInstallationTemplates are located
+	TemplatesDir = "templates.d"
+)
+
+const (
 	// Default values for update timeout and polling period in seconds
 	defaultStatefulSetUpdateTimeout    = 300
 	defaultStatefulSetUpdatePollPeriod = 15
@@ -126,74 +140,54 @@ func (config *DaisyOperatorConfigurationSpec) readCHITemplates() {
 			klog.V(1).Infof("FAIL readCHITemplates() unable to unmarshal file %s Error: %q", filename, err)
 			continue
 		}
-		config.enlistCHITemplate(template)
+		config.EnlistDaisyTemplate(template)
 	}
 }
 
-// enlistCHITemplate inserts template into templates catalog
-func (config *DaisyOperatorConfigurationSpec) enlistCHITemplate(template *DaisyInstallation) {
+// EnlistDaisyTemplate inserts template into templates catalog
+func (config *DaisyOperatorConfigurationSpec) EnlistDaisyTemplate(template *DaisyInstallation) {
 	if config.CHITemplates == nil {
 		config.CHITemplates = make([]*DaisyInstallation, 0)
 	}
 	config.CHITemplates = append(config.CHITemplates, template)
-	klog.V(1).Infof("enlistCHITemplate(%s/%s)", template.Namespace, template.Name)
+	klog.V(1).Infof("EnlistDaisyTemplate(%s/%s)", template.Namespace, template.Name)
 }
 
-//// unlistCHITemplate removes template from templates catalog
-//func (config *DaisyOperatorConfigurationSpec) unlistCHITemplate(template *ClickHouseInstallation) {
-//	if config.CHITemplates == nil {
-//		return
-//	}
-//
-//	log.V(1).Infof("unlistCHITemplate(%s/%s)", template.Namespace, template.Name)
-//	// Nullify found template entry
-//	for _, _template := range config.CHITemplates {
-//		if (_template.Name == template.Name) && (_template.Namespace == template.Namespace) {
-//			log.V(1).Infof("unlistCHITemplate(%s/%s) - found, unlisting", template.Namespace, template.Name)
-//			// TODO normalize
-//			//config.CHITemplates[i] = nil
-//			_template.Name = ""
-//			_template.Namespace = ""
-//		}
-//	}
-//	// Compact the slice
-//	// TODO compact the slice
-//}
-//
-//// FindTemplate
-//func (config *DaisyOperatorConfigurationSpec) FindTemplate(use *ChiUseTemplate, namespace string) *ClickHouseInstallation {
-//	// Try to find direct match
-//	for _, _template := range config.CHITemplates {
-//		if _template == nil {
-//			// Skip
-//		} else if _template.MatchFullName(use.Namespace, use.Name) {
-//			// Direct match, found result
-//			return _template
-//		}
-//	}
-//
-//	// Direct match is not possible.
-//
-//	if use.Namespace != "" {
-//		// With fully-specified use template direct (full name) only match is applicable, and it is not possible
-//		// This is strange situation, however
-//		log.V(1).Infof("STRANGE FindTemplate(%s/%s) - unexpected position", use.Namespace, use.Name)
-//		return nil
-//	}
-//
-//	// Improvise with use.Namespace
-//
-//	for _, _template := range config.CHITemplates {
-//		if _template == nil {
-//			// Skip
-//		} else if _template.MatchFullName(namespace, use.Name) {
-//			// Found template with searched name in specified namespace
-//			return _template
-//		}
-//	}
-//
-//	return nil
-//}
+// unlistDaisyTemplate removes template from templates catalog
+func (config *DaisyOperatorConfigurationSpec) unlistDaisyTemplate(template *DaisyInstallation) {
+	if config.CHITemplates == nil {
+		return
+	}
+
+	klog.V(1).Infof("unlistDaisyTemplate(%s/%s)", template.Namespace, template.Name)
+	// Nullify found template entry
+	for _, _template := range config.CHITemplates {
+		if (_template.Name == template.Name) && (_template.Namespace == template.Namespace) {
+			klog.V(1).Infof("unlistDaisyTemplate(%s/%s) - found, unlisting", template.Namespace, template.Name)
+			// TODO normalize
+			//config.CHITemplates[i] = nil
+			_template.Name = ""
+			_template.Namespace = ""
+		}
+	}
+	// Compact the slice
+	// TODO compact the slice
+}
+
+// FindTemplate find a template in cache of ConfigManager
+func (config *DaisyOperatorConfigurationSpec) FindTemplate(use *UseTemplate, namespace string) *DaisyInstallation {
+	// Try to find direct match
+	for _, _template := range config.CHITemplates {
+		if _template == nil {
+			// Skip
+		} else if _template.MatchFullName(use.Namespace, use.Name) {
+			// Direct match, found result
+			return _template
+		}
+	}
+
+	return nil
+}
 
 // buildUnifiedCHITemplate builds combined CHI Template from templates catalog
 func (config *DaisyOperatorConfigurationSpec) buildUnifiedCHITemplate() {
@@ -237,23 +231,23 @@ func (config *DaisyOperatorConfigurationSpec) buildUnifiedCHITemplate() {
 	*/
 }
 
-//// AddCHITemplate
-//func (config *DaisyOperatorConfigurationSpec) AddCHITemplate(template *ClickHouseInstallation) {
-//	config.enlistCHITemplate(template)
-//	config.buildUnifiedCHITemplate()
-//}
-//
-//// UpdateCHITemplate
-//func (config *DaisyOperatorConfigurationSpec) UpdateCHITemplate(template *ClickHouseInstallation) {
-//	config.enlistCHITemplate(template)
-//	config.buildUnifiedCHITemplate()
-//}
-//
-//// DeleteCHITemplate
-//func (config *DaisyOperatorConfigurationSpec) DeleteCHITemplate(template *ClickHouseInstallation) {
-//	config.unlistCHITemplate(template)
-//	config.buildUnifiedCHITemplate()
-//}
+// AddCHITemplate
+func (config *DaisyOperatorConfigurationSpec) AddDaisyTemplate(template *DaisyInstallation) {
+	config.EnlistDaisyTemplate(template)
+	config.buildUnifiedCHITemplate()
+}
+
+// UpdateCHITemplate
+func (config *DaisyOperatorConfigurationSpec) UpdateDaisyTemplate(template *DaisyInstallation) {
+	config.EnlistDaisyTemplate(template)
+	config.buildUnifiedCHITemplate()
+}
+
+// DeleteCHITemplate
+func (config *DaisyOperatorConfigurationSpec) DeleteDaisyTemplate(template *DaisyInstallation) {
+	config.unlistDaisyTemplate(template)
+	config.buildUnifiedCHITemplate()
+}
 
 // Postprocess
 func (config *DaisyOperatorConfigurationSpec) Postprocess() {

@@ -16,9 +16,13 @@
 package v1
 
 import (
+	"github.com/imdario/mergo"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+
 	"github.com/daisy/daisy-operator/pkg/label"
-	"github.com/daisy/daisy-operator/pkg/version"
 )
+
+var log = logf.Log.WithName("daisy-installation")
 
 func (di *DaisyInstallation) GetInstanceName() string {
 	labels := di.ObjectMeta.GetLabels()
@@ -70,7 +74,7 @@ func (di *DaisyInstallation) MergeFrom(from *DaisyInstallation, _type MergeType)
 	di.ObjectMeta = from.ObjectMeta
 
 	// Do actual merge for Spec
-	di.Spec = *from.Spec.DeepCopy()
+	(&di.Spec).MergeFrom(&from.Spec, _type)
 
 	// Copy Status for now
 	di.Status = from.Status
@@ -84,44 +88,6 @@ func (di *DaisyInstallation) IsAllClusterReady() bool {
 		}
 	}
 	return true
-}
-
-func (di *DaisyInstallation) FillStatus() {
-	di.Status.Version = version.Version
-	di.Status.ClustersCount = di.ClustersCount()
-	di.Status.ShardsCount = di.ShardsCount()
-	di.Status.ReplicasCount = di.ReplicasCount()
-	di.Status.UpdatedReplicasCount = 0
-	di.Status.DeletedReplicasCount = 0
-	di.Status.AddedReplicasCount = 0
-	di.Status.ReadyReplicas = 0
-}
-
-func (di *DaisyInstallation) ClustersCount() int {
-	return len(di.Spec.Configuration.Clusters)
-}
-
-func (di *DaisyInstallation) ShardsCount() int {
-	count := 0
-	di.LoopClusters(func(name string, cluster *Cluster) error {
-		count += len(cluster.Layout.Shards)
-		return nil
-	})
-	return count
-}
-
-func (di *DaisyInstallation) ReplicasCount() int {
-	count := 0
-
-	di.LoopClusters(func(name string, cluster *Cluster) error {
-		cluster.LoopShards(di, func(
-			name string, shard *Shard, di *DaisyInstallation, cluster *Cluster) error {
-			count += len(shard.Replicas)
-			return nil
-		})
-		return nil
-	})
-	return count
 }
 
 // LoopAllReplicas exec fn func for each replica
@@ -368,4 +334,204 @@ func (replica *Replica) IsNormal(clusterName string, shardName string, di *Daisy
 		return true
 	}
 	return false
+}
+
+func (templates *Templates) MergeFrom(from *Templates, _type MergeType) {
+	if from == nil {
+		return
+	}
+
+	if len(from.PodTemplates) > 0 {
+		// We have templates to copy from
+		// Append PodTemplates from `from` to receiver
+		if templates.PodTemplates == nil {
+			templates.PodTemplates = make([]DaisyPodTemplate, 0)
+		}
+		// Loop over all 'from' templates and copy it in case no such template in receiver
+		for fromIndex := range from.PodTemplates {
+			fromTemplate := &from.PodTemplates[fromIndex]
+
+			// Try to find entry with the same name among local templates in receiver
+			sameNameFound := false
+			for toIndex := range templates.PodTemplates {
+				toTemplate := &templates.PodTemplates[toIndex]
+				if toTemplate.Name == fromTemplate.Name {
+					// Receiver already have such a template
+					sameNameFound = true
+					// Override `to` template with `from` template
+					//templates.PodTemplates[toIndex] = *fromTemplate.DeepCopy()
+					if err := mergo.Merge(toTemplate, *fromTemplate, mergo.WithOverride); err != nil {
+						log.V(1).Error(err, "ERROR merge template", "PodTemplate", toTemplate.Name)
+					}
+					break
+				}
+			}
+
+			if !sameNameFound {
+				// Receiver does not have template with such a name
+				// Append template from `from`
+				templates.PodTemplates = append(templates.PodTemplates, *fromTemplate.DeepCopy())
+			}
+		}
+	}
+
+	if len(from.VolumeClaimTemplates) > 0 {
+		// We have templates to copy from
+		// Append VolumeClaimTemplates from `from` to receiver
+		if templates.VolumeClaimTemplates == nil {
+			templates.VolumeClaimTemplates = make([]VolumeClaimTemplate, 0)
+		}
+		// Loop over all 'from' templates and copy it in case no such template in receiver
+		for fromIndex := range from.VolumeClaimTemplates {
+			fromTemplate := &from.VolumeClaimTemplates[fromIndex]
+
+			// Try to find entry with the same name among local templates in receiver
+			sameNameFound := false
+			for toIndex := range templates.VolumeClaimTemplates {
+				toTemplate := &templates.VolumeClaimTemplates[toIndex]
+				if toTemplate.Name == fromTemplate.Name {
+					// Receiver already have such a template
+					sameNameFound = true
+					// Override `to` template with `from` template
+					//templates.VolumeClaimTemplates[toIndex] = *fromTemplate.DeepCopy()
+					if err := mergo.Merge(toTemplate, *fromTemplate, mergo.WithOverride); err != nil {
+						log.V(1).Error(err, "ERROR merge template(%s): %v", "VolumeClaimTemplate", toTemplate.Name)
+					}
+					break
+				}
+			}
+
+			if !sameNameFound {
+				// Receiver does not have template with such a name
+				// Append template from `from`
+				templates.VolumeClaimTemplates = append(templates.VolumeClaimTemplates, *fromTemplate.DeepCopy())
+			}
+		}
+	}
+}
+
+func (tplNames *TemplateNames) MergeFrom(from *TemplateNames, _type MergeType) {
+	switch _type {
+	case MergeTypeFillEmptyValues:
+		//if tplNames.HostTemplate == "" {
+		//	tplNames.HostTemplate = from.HostTemplate
+		//}
+		if tplNames.PodTemplate == "" {
+			tplNames.PodTemplate = from.PodTemplate
+		}
+		if tplNames.DataVolumeClaimTemplate == "" {
+			tplNames.DataVolumeClaimTemplate = from.DataVolumeClaimTemplate
+		}
+		if tplNames.LogVolumeClaimTemplate == "" {
+			tplNames.LogVolumeClaimTemplate = from.LogVolumeClaimTemplate
+		}
+		//if tplNames.ServiceTemplate == "" {
+		//	tplNames.ServiceTemplate = from.ServiceTemplate
+		//}
+		//if tplNames.ClusterServiceTemplate == "" {
+		//	tplNames.ClusterServiceTemplate = from.ClusterServiceTemplate
+		//}
+		//if tplNames.ShardServiceTemplate == "" {
+		//	tplNames.ShardServiceTemplate = from.ShardServiceTemplate
+		//}
+		//if tplNames.ReplicaServiceTemplate == "" {
+		//	tplNames.ReplicaServiceTemplate = from.ReplicaServiceTemplate
+		//}
+	case MergeTypeOverrideByNonEmptyValues:
+		// Override by non-empty values only
+		//if from.HostTemplate != "" {
+		//	tplNames.HostTemplate = from.HostTemplate
+		//}
+		if from.PodTemplate != "" {
+			tplNames.PodTemplate = from.PodTemplate
+		}
+		if from.DataVolumeClaimTemplate != "" {
+			tplNames.DataVolumeClaimTemplate = from.DataVolumeClaimTemplate
+		}
+		if from.LogVolumeClaimTemplate != "" {
+			tplNames.LogVolumeClaimTemplate = from.LogVolumeClaimTemplate
+		}
+		//if from.VolumeClaimTemplate != "" {
+		//	tplNames.VolumeClaimTemplate = from.VolumeClaimTemplate
+		//}
+		//if from.ServiceTemplate != "" {
+		//	tplNames.ServiceTemplate = from.ServiceTemplate
+		//}
+		//if from.ClusterServiceTemplate != "" {
+		//	tplNames.ClusterServiceTemplate = from.ClusterServiceTemplate
+		//}
+		//if from.ShardServiceTemplate != "" {
+		//	tplNames.ShardServiceTemplate = from.ShardServiceTemplate
+		//}
+		//if from.ReplicaServiceTemplate != "" {
+		//	tplNames.ReplicaServiceTemplate = from.ReplicaServiceTemplate
+		//}
+	}
+}
+
+// MatchFullName
+func (di *DaisyInstallation) MatchFullName(namespace, name string) bool {
+	if di == nil {
+		return false
+	}
+	return (di.Namespace == namespace) && (di.Name == name)
+}
+
+// MergeFrom
+func (spec *DaisyInstallationSpec) MergeFrom(from *DaisyInstallationSpec, _type MergeType) {
+	if from == nil {
+		return
+	}
+
+	switch _type {
+	case MergeTypeFillEmptyValues:
+	case MergeTypeOverrideByNonEmptyValues:
+		spec.Paused = from.Paused
+	}
+
+	(&spec.Defaults).MergeFrom(&from.Defaults, _type)
+	(&spec.Configuration).MergeFrom(&from.Configuration, _type)
+	(&spec.Templates).MergeFrom(&from.Templates, _type)
+	// TODO may be it would be wiser to make more intelligent merge
+	spec.UseTemplates = append(spec.UseTemplates, from.UseTemplates...)
+}
+
+func (defaults *Defaults) MergeFrom(from *Defaults, _type MergeType) {
+	if from == nil {
+		return
+	}
+
+	switch _type {
+	case MergeTypeFillEmptyValues:
+		if from.ReplicasUseFQDN == "" {
+			defaults.ReplicasUseFQDN = from.ReplicasUseFQDN
+		}
+	case MergeTypeOverrideByNonEmptyValues:
+		if from.ReplicasUseFQDN != "" {
+			// Override by non-empty values only
+			defaults.ReplicasUseFQDN = from.ReplicasUseFQDN
+		}
+	}
+
+	//(&defaults.DistributedDDL).MergeFrom(&from.DistributedDDL, _type)
+	(&defaults.Templates).MergeFrom(&from.Templates, _type)
+
+}
+
+// MergeFrom merges from specified source
+func (configuration *Configuration) MergeFrom(from *Configuration, _type MergeType) {
+	if from == nil {
+		return
+	}
+
+	(&configuration.Zookeeper).MergeFrom(&from.Zookeeper, _type)
+	(&configuration.Users).MergeFrom(from.Users)
+	(&configuration.Profiles).MergeFrom(from.Profiles)
+	(&configuration.Quotas).MergeFrom(from.Quotas)
+	(&configuration.Settings).MergeFrom(from.Settings)
+	(&configuration.Files).MergeFrom(from.Files)
+
+	// TODO merge clusters
+	// Copy Clusters for now
+	configuration.Clusters = from.Clusters
 }

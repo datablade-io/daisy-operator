@@ -1,0 +1,14 @@
+apiVersion: "daisy.com/v1"
+kind: "DaisyTemplate"
+metadata:
+  name: "default-storage-template-2Gi"
+spec:
+  templates:
+    volumeClaimTemplates:
+      - name: default-storage-template-2Gi
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 2Gi
