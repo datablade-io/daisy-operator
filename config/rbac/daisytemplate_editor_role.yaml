@@ -1,0 +1,24 @@
+# permissions for end users to edit daisytemplates.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: daisytemplate-editor-role
+rules:
+- apiGroups:
+  - daisy.com.daisy.com
+  resources:
+  - daisytemplates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - daisy.com.daisy.com
+  resources:
+  - daisytemplates/status
+  verbs:
+  - get

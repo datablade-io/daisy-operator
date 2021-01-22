@@ -1,0 +1,7 @@
+apiVersion: daisy.com.daisy.com/v1
+kind: DaisyTemplate
+metadata:
+  name: daisytemplate-sample
+spec:
+  # Add fields here
+  foo: bar
