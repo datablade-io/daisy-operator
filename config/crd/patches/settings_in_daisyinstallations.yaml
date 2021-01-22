@@ -1,0 +1,176 @@
+# configuration/properties/files
+- op: replace
+  path: /spec/versions/0/schema/openAPIV3Schema/properties/spec/properties/configuration/properties/files
+  value:
+    x-kubernetes-preserve-unknown-fields: true
+    description: Settings
+    type: object
+
+# configuration/properties/profiles
+- op: replace
+  path: /spec/versions/0/schema/openAPIV3Schema/properties/spec/properties/configuration/properties/profiles
+  value:
+    x-kubernetes-preserve-unknown-fields: true
+    description: Settings
+    type: object
+
+# configuration/properties/quotas
+- op: replace
+  path: /spec/versions/0/schema/openAPIV3Schema/properties/spec/properties/configuration/properties/quotas
+  value:
+    x-kubernetes-preserve-unknown-fields: true
+    description: Settings
+    type: object
+
+# configuration/properties/settings
+- op: replace
+  path: /spec/versions/0/schema/openAPIV3Schema/properties/spec/properties/configuration/properties/settings
+  value:
+    x-kubernetes-preserve-unknown-fields: true
+    description: Settings
+    type: object
+
+# configuration/properties/users
+- op: replace
+  path: /spec/versions/0/schema/openAPIV3Schema/properties/spec/properties/configuration/properties/users
+  value:
+    x-kubernetes-preserve-unknown-fields: true
+    description: Settings
+    type: object
+
+# configuration/properties/clusters/additionalProperties/properties/files
+- op: replace
+  path: /spec/versions/0/schema/openAPIV3Schema/properties/spec/properties/configuration/properties/clusters/additionalProperties/properties/files
+  value:
+    x-kubernetes-preserve-unknown-fields: true
+    description: Settings
+    type: object
+
+# configuration/properties/clusters/additionalProperties/properties/settings
+- op: replace
+  path: /spec/versions/0/schema/openAPIV3Schema/properties/spec/properties/configuration/properties/clusters/additionalProperties/properties/settings
+  value:
+    x-kubernetes-preserve-unknown-fields: true
+    description: Settings
+    type: object
+
+# configuration/properties/clusters/additionalProperties/properties/layout/properties/shards/additionalProperties/properties/files
+- op: replace
+  path: /spec/versions/0/schema/openAPIV3Schema/properties/spec/properties/configuration/properties/clusters/additionalProperties/properties/layout/properties/shards/additionalProperties/properties/files
+  value:
+    x-kubernetes-preserve-unknown-fields: true
+    description: Settings
+    type: object
+
+# configuration/properties/clusters/additionalProperties/properties/layout/properties/shards/additionalProperties/properties/settings
+- op: replace
+  path: /spec/versions/0/schema/openAPIV3Schema/properties/spec/properties/configuration/properties/clusters/additionalProperties/properties/layout/properties/shards/additionalProperties/properties/settings
+  value:
+    x-kubernetes-preserve-unknown-fields: true
+    description: Settings
+    type: object
+
+# shards/additionalProperties/properties/replicas/additionalProperties/properties/files
+- op: replace
+  path: /spec/versions/0/schema/openAPIV3Schema/properties/spec/properties/configuration/properties/clusters/additionalProperties/properties/layout/properties/shards/additionalProperties/properties/replicas/additionalProperties/properties/files
+  value:
+    x-kubernetes-preserve-unknown-fields: true
+    description: Settings
+    type: object
+
+# shards/additionalProperties/properties/replicas/additionalProperties/properties/settings
+- op: replace
+  path: /spec/versions/0/schema/openAPIV3Schema/properties/spec/properties/configuration/properties/clusters/additionalProperties/properties/layout/properties/shards/additionalProperties/properties/replicas/additionalProperties/properties/settings
+  value:
+    x-kubernetes-preserve-unknown-fields: true
+    description: Settings
+    type: object
+
+### Status
+# status/properties/prevSpec/properties/configuration/properties/files
+- op: replace
+  path: /spec/versions/0/schema/openAPIV3Schema/properties/status/properties/prevSpec/properties/configuration/properties/files
+  value:
+    x-kubernetes-preserve-unknown-fields: true
+    description: Settings
+    type: object
+
+# status/properties/prevSpec/properties/configuration/properties/profiles
+- op: replace
+  path: /spec/versions/0/schema/openAPIV3Schema/properties/status/properties/prevSpec/properties/configuration/properties/profiles
+  value:
+    x-kubernetes-preserve-unknown-fields: true
+    description: Settings
+    type: object
+
+# status/properties/prevSpec/properties/configuration/properties/quotas
+- op: replace
+  path: /spec/versions/0/schema/openAPIV3Schema/properties/status/properties/prevSpec/properties/configuration/properties/quotas
+  value:
+    x-kubernetes-preserve-unknown-fields: true
+    description: Settings
+    type: object
+
+# status/properties/prevSpec/properties/configuration/properties/settings
+- op: replace
+  path: /spec/versions/0/schema/openAPIV3Schema/properties/status/properties/prevSpec/properties/configuration/properties/settings
+  value:
+    x-kubernetes-preserve-unknown-fields: true
+    description: Settings
+    type: object
+
+# status/properties/prevSpec/properties/configuration/properties/users
+- op: replace
+  path: /spec/versions/0/schema/openAPIV3Schema/properties/status/properties/prevSpec/properties/configuration/properties/users
+  value:
+    x-kubernetes-preserve-unknown-fields: true
+    description: Settings
+    type: object
+
+# status/properties/prevSpec/properties/configuration/properties/clusters/additionalProperties/properties/files
+- op: replace
+  path: /spec/versions/0/schema/openAPIV3Schema/properties/status/properties/prevSpec/properties/configuration/properties/clusters/additionalProperties/properties/files
+  value:
+    x-kubernetes-preserve-unknown-fields: true
+    description: Settings
+    type: object
+
+# status/properties/prevSpec/properties/configuration/properties/clusters/additionalProperties/properties/settings
+- op: replace
+  path: /spec/versions/0/schema/openAPIV3Schema/properties/status/properties/prevSpec/properties/configuration/properties/clusters/additionalProperties/properties/settings
+  value:
+    x-kubernetes-preserve-unknown-fields: true
+    description: Settings
+    type: object
+
+# status/properties/prevSpec/properties/configuration/properties/clusters/additionalProperties/properties/layout/properties/shards/additionalProperties/files
+- op: replace
+  path: /spec/versions/0/schema/openAPIV3Schema/properties/status/properties/prevSpec/properties/configuration/properties/clusters/additionalProperties/properties/layout/properties/shards/additionalProperties/properties/files
+  value:
+    x-kubernetes-preserve-unknown-fields: true
+    description: Settings
+    type: object
+
+# status/properties/prevSpec/properties/configuration/properties/clusters/additionalProperties/properties/layout/properties/shards/additionalProperties/settings
+- op: replace
+  path: /spec/versions/0/schema/openAPIV3Schema/properties/status/properties/prevSpec/properties/configuration/properties/clusters/additionalProperties/properties/layout/properties/shards/additionalProperties/properties/settings
+  value:
+    x-kubernetes-preserve-unknown-fields: true
+    description: Settings
+    type: object
+
+# status/properties/prevSpec/properties/configuration/properties/clusters/additionalProperties/properties/layout/properties/shards/additionalProperties/replicas/additionalProperties/properties/files
+- op: replace
+  path: /spec/versions/0/schema/openAPIV3Schema/properties/status/properties/prevSpec/properties/configuration/properties/clusters/additionalProperties/properties/layout/properties/shards/additionalProperties/properties/replicas/additionalProperties/properties/files
+  value:
+    x-kubernetes-preserve-unknown-fields: true
+    description: Settings
+    type: object
+
+# status/properties/prevSpec/properties/configuration/properties/clusters/additionalProperties/properties/layout/properties/shards/additionalProperties/replicas/additionalProperties/properties/settings
+- op: replace
+  path: /spec/versions/0/schema/openAPIV3Schema/properties/status/properties/prevSpec/properties/configuration/properties/clusters/additionalProperties/properties/layout/properties/shards/additionalProperties/properties/replicas/additionalProperties/properties/settings
+  value:
+    x-kubernetes-preserve-unknown-fields: true
+    description: Settings
+    type: object

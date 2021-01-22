@@ -53,7 +53,7 @@ run: generate fmt vet manifests
 
 # Install CRDs into a cluster
 install: manifests kustomize
-	$(KUSTOMIZE) build config/crd | kubectl apply -f -
+	($(KUSTOMIZE)  build config/crd | kubectl replace -f -) || ($(KUSTOMIZE)  build config/crd | kubectl create -f -)
 
 # Uninstall CRDs from a cluster
 uninstall: manifests kustomize
@@ -62,7 +62,7 @@ uninstall: manifests kustomize
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests kustomize
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	$(KUSTOMIZE) build config/default | kubectl apply -f -
+	$(KUSTOMIZE) build config/default | kubectl create -f -
 
 # Copy webhook certs to local for debug
 copy-running-certs:
@@ -82,6 +82,7 @@ undeploy:
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	$(KUSTOMIZE) build config/crd -o config/crd/tmp/crd.yaml
 
 # Run go fmt against code
 fmt:
