@@ -11,6 +11,9 @@ BUNDLE_DEFAULT_CHANNEL := --default-channel=$(DEFAULT_CHANNEL)
 endif
 BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 
+# Certificate dir of Webhook
+TEST_WEBHOOK_CERTS_DIR ?= /tmp/k8s-webhook-server/serving-certs
+
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
@@ -37,11 +40,42 @@ E2E_ASSETS_DIR=$(shell pwd)/tests
 e2e: generate fmt vet manifests
 	$(E2E_ASSETS_DIR)/run_tests.sh
 
-#Setup Kind environment
+# Generate local debug certificate
 HACK_DIR=$(shell pwd)/hack
+cert: $(TEST_WEBHOOK_CERTS_DIR) $(TEST_WEBHOOK_CERTS_DIR)/tls.crt
+
+$(TEST_WEBHOOK_CERTS_DIR):
+	mkdir -p $(TEST_WEBHOOK_CERTS_DIR)
+
+$(TEST_WEBHOOK_CERTS_DIR)/ca.key:
+	openssl genrsa -out $(TEST_WEBHOOK_CERTS_DIR)/ca.key 1024
+
+$(TEST_WEBHOOK_CERTS_DIR)/ca.crt: $(TEST_WEBHOOK_CERTS_DIR)/ca.key
+	openssl req -x509 -new -nodes -key $(TEST_WEBHOOK_CERTS_DIR)/ca.key -subj "/C=CN/ST=Shanghai/O=daisy/CN=webhook" -sha256 -days 3650 -out $(TEST_WEBHOOK_CERTS_DIR)/ca.crt
+
+$(TEST_WEBHOOK_CERTS_DIR)/tls.key:
+	openssl genrsa -out $(TEST_WEBHOOK_CERTS_DIR)/tls.key 1024
+
+$(TEST_WEBHOOK_CERTS_DIR)/tls.csr: $(TEST_WEBHOOK_CERTS_DIR)/tls.key
+	openssl req -new -sha256 -key $(TEST_WEBHOOK_CERTS_DIR)/tls.key \
+		-subj "/C=CN/ST=Shanghai/O=daisy/CN=host.docker.internal" \
+   		-config config/debug/req.cnf \
+   		-out $(TEST_WEBHOOK_CERTS_DIR)/tls.csr
+
+$(TEST_WEBHOOK_CERTS_DIR)/tls.crt: $(TEST_WEBHOOK_CERTS_DIR)/tls.csr $(TEST_WEBHOOK_CERTS_DIR)/ca.crt $(TEST_WEBHOOK_CERTS_DIR)/ca.key
+	openssl x509 -req -in $(TEST_WEBHOOK_CERTS_DIR)/tls.csr -CA $(TEST_WEBHOOK_CERTS_DIR)/ca.crt -CAkey $(TEST_WEBHOOK_CERTS_DIR)/ca.key \
+	-extfile config/debug/san.cnf \
+	-CAcreateserial -out $(TEST_WEBHOOK_CERTS_DIR)/tls.crt -days 3650 -sha256
+
+#Setup Kind environment
 kind:
 	$(HACK_DIR)/patch-kind.sh
 	$(HACK_DIR)/install-certmgr.sh
+
+#register crds & webhook for local debug
+debug: manifests kustomize
+	$(HACK_DIR)/write-runtime-patches.sh
+	$(KUSTOMIZE)  build config/debug | kubectl apply -f -
 
 # Build manager binary
 manager: generate fmt vet
@@ -80,7 +114,7 @@ undeploy:
 	$(KUSTOMIZE) build config/default | kubectl delete -f -
 
 # Generate manifests e.g. CRD, RBAC etc.
-manifests: controller-gen
+manifests: controller-gen kustomize
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 	$(KUSTOMIZE) build config/crd -o config/crd/tmp/crd.yaml
 

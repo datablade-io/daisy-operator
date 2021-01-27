@@ -24,7 +24,7 @@ import (
 )
 
 // log is for logging in this package.
-var daisyinstallationlog = logf.Log.WithName("daisyinstallation-resource")
+var daisyinstallationlog = logf.Log.WithName("daisyinstallation-webhook")
 
 func (r *DaisyInstallation) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
@@ -43,6 +43,11 @@ func (r *DaisyInstallation) Default() {
 	daisyinstallationlog.Info("default", "name", r.Name)
 
 	// TODO(user): fill in your defaulting logic.
+	// To avoid call Default() multi times when requeue
+	if r.Labels == nil {
+		r.Labels = make(map[string]string)
+	}
+	r.Labels["daisy.com/daisy-webhook-default"] = "handled"
 }
 
 // TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
