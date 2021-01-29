@@ -227,7 +227,7 @@ func TestDaisyMemberManager_Update(t *testing.T) {
 
 			prepareResourceForInstallation(m, di, true, g)
 			tt.update(di)
-			runSync(m, di, di, true)
+			runSync(m, di, true)
 
 			c := newChecker(di, g)
 			if tt.verify != nil {

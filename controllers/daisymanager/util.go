@@ -17,11 +17,8 @@ package daisymanager
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"github.com/daisy/daisy-operator/pkg/k8s"
-	"github.com/daisy/daisy-operator/pkg/version"
-	"k8s.io/apimachinery/pkg/util/sets"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sort"
 	"strconv"
 	"strings"
@@ -30,10 +27,14 @@ import (
 	apps "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	v1 "github.com/daisy/daisy-operator/api/v1"
+	"github.com/daisy/daisy-operator/pkg/k8s"
 	"github.com/daisy/daisy-operator/pkg/label"
+	"github.com/daisy/daisy-operator/pkg/version"
 )
 
 const (
@@ -325,6 +326,31 @@ func ExtractLastOrdinal(name string) int {
 		}
 	}
 	return r
+}
+
+func GetDeleteSlotsForShard(di *v1.DaisyInstallation, shardName string) (set sets.Int) {
+	set = sets.NewInt()
+	annotations := di.GetAnnotations()
+	if annotations == nil {
+		return
+	}
+	value, ok := annotations[DeleteSlotsAnn]
+	if !ok {
+		return
+	}
+	var slice []string
+	err := json.Unmarshal([]byte(value), &slice)
+	if err != nil {
+		return
+	}
+
+	for _, s := range slice {
+		if strings.Contains(s, shardName) {
+			idx := ExtractLastOrdinal(s)
+			set.Insert(idx)
+		}
+	}
+	return
 }
 
 // Retry

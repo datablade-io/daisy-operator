@@ -96,8 +96,7 @@ func (n *Normalizer) GetInstallationFromTemplate(di *v1.DaisyInstallation, withD
 
 func (n *Normalizer) normalizeInstallation(di *v1.DaisyInstallation) (*NormalizedSpec, error) {
 	// Walk over Spec datatype fields
-	// TODO: get delete-slots from ObjectMeta
-	//deleteSlots := helper.GetDeleteSlots(chi)
+	//deleteSlots := di.GetDeleteSlots()
 
 	//n.normalizeStop(&n.chi.Spec.Stop)
 	n.normalizeConfiguration(di, &n.di.Spec.Configuration)
@@ -384,6 +383,7 @@ func (n *Normalizer) normalizeClusterLayoutShardsCountAndReplicasCount(layout *v
 		layout.ShardsCount = 1
 
 		// Let's look for explicitly specified Shards in Layout.Shards
+		// currently this branch cannot be reached
 		if len(layout.Shards) > layout.ShardsCount {
 			// We have some Shards specified explicitly, do not allow to delete shards for now
 			layout.ShardsCount = len(layout.Shards)
@@ -481,10 +481,17 @@ func (n *Normalizer) normalizeShard(shard *v1.Shard, di *v1.DaisyInstallation, c
 	n.normalizeConfigurationSettings(&shard.Settings)
 	shard.InheritFilesFrom(cluster)
 	n.normalizeConfigurationSettings(&shard.Files)
+
+	set := GetDeleteSlotsForShard(di, shard.Name)
 	//shard.InheritTemplatesFrom(cluster)
 	// Normalize Replicas
-	n.normalizeShardReplicasCount(shard, cluster.Layout.ReplicasCount, nil)
-	n.normalizeReplicas(shard, di, cluster, -1)
+	n.normalizeShardReplicasCount(shard, cluster.Layout.ReplicasCount, set)
+
+	// if delete slots have been ignored, set the set to nil
+	if shard.ReplicaCount == cluster.Layout.ReplicasCount {
+		set = nil
+	}
+	n.normalizeReplicas(shard, di, cluster, set)
 	// Internal replication uses ReplicasCount thus it has to be normalized after shard ReplicaCount normalized
 	n.normalizeShardInternalReplication(shard)
 }
@@ -512,13 +519,15 @@ func (n *Normalizer) normalizeShardReplicasCount(shard *v1.Shard, layoutReplicas
 	shard.ReplicaCount = layoutReplicasCount
 
 	// if set is not empty, it should exclude the replicas to be deleted
-	if len(set) > 0 {
+	if shard.ReplicaCount > len(set) {
 		shard.ReplicaCount = shard.ReplicaCount - len(set)
+	} else {
+		log.Info("Ignore delete-slots,  as ReplicaCount is less or equal to length of delete-slots", "Shard", shard.Name, "replicaCount", shard.ReplicaCount, "slotCount", len(set), "Slot", set)
 	}
 }
 
 // normalizeShardHosts normalizes all replicas of specified shard
-func (n *Normalizer) normalizeReplicas(shard *v1.Shard, di *v1.DaisyInstallation, cluster *v1.Cluster, shardIndex int) {
+func (n *Normalizer) normalizeReplicas(shard *v1.Shard, di *v1.DaisyInstallation, cluster *v1.Cluster, skip sets.Int) {
 	// Use hosts from HostsField
 	//if shard.Replicas != nil && len(shard.Replicas)>0 {
 	//	return
@@ -530,7 +539,7 @@ func (n *Normalizer) normalizeReplicas(shard *v1.Shard, di *v1.DaisyInstallation
 
 	newReplicas := sets.NewString()
 	for i := 0; i < shard.ReplicaCount; i++ {
-		newReplicas.Insert(CreateReplicaName(shard.Name, i, nil))
+		newReplicas.Insert(CreateReplicaName(shard.Name, i, skip))
 	}
 
 	for len(shard.Replicas) < shard.ReplicaCount {
@@ -538,10 +547,10 @@ func (n *Normalizer) normalizeReplicas(shard *v1.Shard, di *v1.DaisyInstallation
 		replicaIndex := len(shard.Replicas)
 		// Check whether we have this host in HostsField
 		replica := v1.Replica{
-			Name: CreateReplicaName(shard.Name, replicaIndex, nil),
+			Name: CreateReplicaName(shard.Name, replicaIndex, skip),
 		}
 		//shard.Replicas[replica.Name] = replica
-		n.normalizeReplica(&replica, shard, cluster, replicaIndex, nil)
+		n.normalizeReplica(&replica, shard, cluster, replicaIndex, skip)
 		shard.Replicas[replica.Name] = replica
 	}
 
