@@ -216,7 +216,7 @@ func TestDaisyMemberManager_UseTemplates(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m, cli := newFakeDaisyMemberManager(tt.initObjs...)
 			di := tt.di
-			runSync(m, di, di, true)
+			runSync(m, di, true)
 
 			c := newChecker(di, g)
 			r01 := di.Status.PrevSpec.Configuration.Clusters["cluster"].
@@ -324,7 +324,7 @@ func TestDaisyMemberManager_StatusUpdate(t *testing.T) {
 			init: prepareResourceForInstallation,
 			update: func(m *DaisyMemberManager, di *v1.DaisyInstallation, g *GomegaWithT) {
 				scaleByReplica(di, "cluster", 1)
-				runSync(m, di, di, true)
+				runSync(m, di, true)
 				updateAllStsToReady(m.deps.Client, di, g)
 			},
 			di:          newTestInstallation(1, 2),
@@ -377,7 +377,7 @@ func TestDaisyMemberManager_StatusUpdate(t *testing.T) {
 			tt.update(m, old, g)
 			cur.Status = *old.Status.DeepCopy()
 			cur.ObjectMeta = old.ObjectMeta
-			runSync(m, old, cur, tt.notSyncOnce)
+			runSync(m, cur, tt.notSyncOnce)
 			tt.verify(cli, cur, g)
 		})
 	}

@@ -1,15 +1,15 @@
 package daisymanager
 
 import (
+	"encoding/json"
 	"fmt"
+	v1 "github.com/daisy/daisy-operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/pointer"
-
-	v1 "github.com/daisy/daisy-operator/api/v1"
 )
 
 func pvcsToObj(pvcs []corev1.PersistentVolumeClaim) []runtime.Object {
@@ -247,6 +247,18 @@ func addUseTemplates(di *v1.DaisyInstallation) *v1.DaisyInstallation {
 		newUseTemplate("tp2", corev1.NamespaceDefault),
 	}
 	di.Spec.UseTemplates = tps
+	return di
+}
+
+func withDeleteSlots(di *v1.DaisyInstallation, deleteSlots ...string) *v1.DaisyInstallation {
+	b, err := json.Marshal(deleteSlots)
+	if err != nil {
+		return di
+	}
+	if di.Annotations == nil {
+		di.Annotations = make(map[string]string)
+	}
+	di.Annotations[DeleteSlotsAnn] = string(b)
 	return di
 }
 

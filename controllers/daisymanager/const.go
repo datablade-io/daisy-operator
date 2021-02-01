@@ -118,6 +118,9 @@ const (
 
 	// Default value for ClusterIP service
 	templateDefaultsServiceClusterIP = "None"
+
+	// Annotation
+	DeleteSlotsAnn = "daisy.com/delete-slots"
 )
 
 const (

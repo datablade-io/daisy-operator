@@ -179,7 +179,7 @@ func prepareResourceForInstallation(m *DaisyMemberManager, di *v1.DaisyInstallat
 	}
 }
 
-func runSync(m *DaisyMemberManager, old, cur *v1.DaisyInstallation, notOnce bool) {
+func runSync(m *DaisyMemberManager, cur *v1.DaisyInstallation, notOnce bool) {
 	if !notOnce {
 		m.Sync(cur)
 	} else {

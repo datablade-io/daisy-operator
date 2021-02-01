@@ -102,6 +102,8 @@ func (m *DaisyMemberManager) Sync(cur *v1.DaisyInstallation) error {
 	dcName := cur.GetName()
 
 	log := m.deps.Log.WithName("DaisyMemeberManager").WithValues("Namespace", ns, "Installation", dcName)
+	log.V(2).Info("Sync Start")
+	defer log.V(2).Info("Sync End")
 
 	if cur == nil {
 		return nil
@@ -179,10 +181,12 @@ func (m *DaisyMemberManager) Sync(cur *v1.DaisyInstallation) error {
 
 	if !apiequality.Semantic.DeepEqual(oldStatus, cur.Status) {
 		// after update the installation, the spec will be changed by Client, therefore backup the spec first
+		status := cur.Status.DeepCopy()
 		if err = m.deps.Client.Update(context.Background(), cur); err != nil {
 			return err
 		}
-		log.Info("Update Status")
+		log.Info("Update Status", "State", status.State)
+		cur.Status = *status
 		if err = UpdateInstallationStatus(m.deps.Client, cur, true); err != nil {
 			return err
 		}
@@ -1130,6 +1134,9 @@ func (m *DaisyMemberManager) deleteReplica(ctx *memberContext, di *v1.DaisyInsta
 		return err
 	}
 	di.Status.DeletedReplicasCount++
+	shardStatus := di.Status.Clusters[ctx.CurCluster].Shards[ctx.CurShard]
+	delete(shardStatus.Replicas, r.Name)
+	di.Status.Clusters[ctx.CurCluster].Shards[ctx.CurShard] = shardStatus
 
 	//TODO: mark PVC for garbage collect in future to avoid Pod fail to schedule error
 	if di.Spec.PVReclaimPolicy == corev1.PersistentVolumeReclaimDelete {
