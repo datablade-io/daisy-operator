@@ -9,6 +9,13 @@
 make generate manifests
 ```
 
+## Debug in IDE
+debug parameter: 
+```
+#GO Envrionment: GODEBUG=x509ignoreCN=0
+--config=config/config.yaml --zap-log-level=2
+```
+
 ## Build
 All below make task should run from parant directory
 
