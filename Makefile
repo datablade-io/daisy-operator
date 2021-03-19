@@ -72,6 +72,11 @@ kind:
 	$(HACK_DIR)/patch-kind.sh
 	$(HACK_DIR)/install-certmgr.sh
 
+#Delete Kind environment
+HACK_DIR=$(shell pwd)/hack
+unkind:
+	$(HACK_DIR)/delete-kind.sh
+
 #register crds & webhook for local debug
 debug: manifests kustomize
 	$(HACK_DIR)/write-runtime-patches.sh
