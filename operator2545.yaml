@@ -1,3 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    control-plane: controller-manager
+  name: daisy-operator-system
+---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -12877,3 +12884,636 @@ spec:
         type: object
     served: true
     storage: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: daisy-operator-leader-election-role
+  namespace: daisy-operator-system
+rules:
+- apiGroups:
+  - ""
+  - coordination.k8s.io
+  resources:
+  - configmaps
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: daisy-operator-manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - daisy.com
+  resources:
+  - daisyinstallations
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - daisy.com
+  resources:
+  - daisyinstallations/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - daisy.com
+  resources:
+  - daisyinstallations/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - daisy.com
+  resources:
+  - daisyoperatorconfigurations
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - daisy.com
+  resources:
+  - daisyoperatorconfigurations/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - daisy.com
+  resources:
+  - daisyoperatorconfigurations/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - daisy.com
+  resources:
+  - daisytemplates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - daisy.com
+  resources:
+  - daisytemplates/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - daisy.com
+  resources:
+  - daisytemplates/status
+  verbs:
+  - get
+  - patch
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: daisy-operator-metrics-reader
+rules:
+- nonResourceURLs:
+  - /metrics
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: daisy-operator-proxy-role
+rules:
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: daisy-operator-leader-election-rolebinding
+  namespace: daisy-operator-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: daisy-operator-leader-election-role
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: daisy-operator-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: daisy-operator-manager-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: daisy-operator-manager-role
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: daisy-operator-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: daisy-operator-proxy-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: daisy-operator-proxy-role
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: daisy-operator-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: daisy-operator-etc-clickhouse-operator-confd-files
+  namespace: daisy-operator-system
+---
+apiVersion: v1
+data:
+  01-clickhouse-listen.xml: |
+    <yandex>
+        <!-- Listen wildcard address to allow accepting connections from other containers and host network. -->
+        <listen_host>::</listen_host>
+        <listen_host>0.0.0.0</listen_host>
+        <listen_try>1</listen_try>
+    </yandex>
+  02-clickhouse-logger.xml: |
+    <yandex>
+        <logger>
+            <!-- Possible levels: https://github.com/pocoproject/poco/blob/develop/Foundation/include/Poco/Logger.h#L105 -->
+            <level>debug</level>
+            <log>/var/log/clickhouse-server/clickhouse-server.log</log>
+            <errorlog>/var/log/clickhouse-server/clickhouse-server.err.log</errorlog>
+            <size>1000M</size>
+            <count>10</count>
+            <!-- Default behavior is autodetection (log to console if not daemon mode and is tty) -->
+            <console>1</console>
+        </logger>
+    </yandex>
+  03-clickhouse-querylog.xml: |-
+    <yandex>
+    <query_log replace="1">
+        <database>system</database>
+        <table>query_log</table>
+        <engine>Engine = MergeTree PARTITION BY event_date ORDER BY event_time TTL event_date + interval 30 day</engine>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+    </query_log>
+    <query_thread_log remove="1"/>
+    </yandex>
+  04-clickhouse-partlog.xml: |-
+    <yandex>
+    <part_log replace="1">
+        <database>system</database>
+        <table>part_log</table>
+        <engine>Engine = MergeTree PARTITION BY event_date ORDER BY event_time TTL event_date + interval 30 day</engine>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+    </part_log>
+    </yandex>
+kind: ConfigMap
+metadata:
+  name: daisy-operator-etc-clickhouse-operator-configd-files
+  namespace: daisy-operator-system
+---
+apiVersion: v1
+data:
+  001-templates.json: |
+    {
+      "apiVersion": "daisy.com/v1",
+      "kind": "DaisyTemplate",
+      "metadata": {
+        "name": "01-default-volumeclaimtemplate"
+      },
+      "spec": {
+        "templates": {
+          "volumeClaimTemplates": [
+            {
+              "name": "default-volume-claim-template",
+              "spec": {
+                "accessModes": [
+                  "ReadWriteOnce"
+                ],
+                "resources": {
+                  "requests": {
+                    "storage": "2Gi"
+                  }
+                }
+              }
+            }
+          ],
+          "podTemplates": [
+            {
+              "name": "default-oneperhost-pod-template",
+              "spec": {
+                "containers" : [
+                  {
+                    "name": "clickhouse",
+                    "image": "yandex/clickhouse-server:19.3.7",
+                    "ports": [
+                      {
+                        "name": "http",
+                        "containerPort": 8123
+                      },
+                      {
+                        "name": "client",
+                        "containerPort": 9000
+                      },
+                      {
+                        "name": "interserver",
+                        "containerPort": 9009
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  02-clickhouse-default-profile.xml: |-
+    <yandex>
+      <profiles>
+        <default>
+          <log_queries>1</log_queries>
+          <connect_timeout_with_failover_ms>1000</connect_timeout_with_failover_ms>
+          <optimize_move_to_prewhere>0</optimize_move_to_prewhere>
+          <distributed_aggregation_memory_efficient>1</distributed_aggregation_memory_efficient>
+          <parallel_view_processing>1</parallel_view_processing>
+          <http_connection_timeout>5</http_connection_timeout>
+        </default>
+      </profiles>
+    </yandex>
+  default-pod-template.yaml.example: |-
+    apiVersion: "daisy.com/v1"
+    kind: "DaisyTemplate"
+    metadata:
+      name: "default-oneperhost-pod-template"
+    spec:
+      templates:
+        podTemplates:
+          - name: default-oneperhost-pod-template
+            distribution: "OnePerHost"
+  default-storage-template.yaml: |
+    apiVersion: "daisy.com/v1"
+    kind: "DaisyTemplate"
+    metadata:
+      name: "default-storage-template-2Gi"
+    spec:
+      templates:
+        volumeClaimTemplates:
+          - name: default-storage-template-2Gi
+            spec:
+              accessModes:
+                - ReadWriteOnce
+              resources:
+                requests:
+                  storage: 2Gi
+kind: ConfigMap
+metadata:
+  name: daisy-operator-etc-clickhouse-operator-templatesd-files
+  namespace: daisy-operator-system
+---
+apiVersion: v1
+data:
+  01-clickhouse-user.xml: |
+    <yandex>
+        <users>
+            <clickhouse_operator>
+                <networks>
+                    <ip>127.0.0.1</ip>
+                    <ip>0.0.0.0/0</ip>
+                    <ip>::/0</ip>
+                </networks>
+                <password_sha256_hex>716b36073a90c6fe1d445ac1af85f4777c5b7a155cea359961826a030513e448</password_sha256_hex>
+                <profile>clickhouse_operator</profile>
+                <quota>default</quota>
+            </clickhouse_operator>
+        </users>
+        <profiles>
+            <clickhouse_operator>
+                <log_queries>0</log_queries>
+                <skip_unavailable_shards>1</skip_unavailable_shards>
+            </clickhouse_operator>
+        </profiles>
+    </yandex>
+  02-clickhouse-default-profile.xml: |-
+    <yandex>
+      <profiles>
+        <default>
+          <log_queries>1</log_queries>
+          <connect_timeout_with_failover_ms>1000</connect_timeout_with_failover_ms>
+          <optimize_move_to_prewhere>0</optimize_move_to_prewhere>
+          <distributed_aggregation_memory_efficient>1</distributed_aggregation_memory_efficient>
+          <parallel_view_processing>1</parallel_view_processing>
+          <http_connection_timeout>5</http_connection_timeout>
+        </default>
+      </profiles>
+    </yandex>
+kind: ConfigMap
+metadata:
+  name: daisy-operator-etc-clickhouse-operator-usersd-files
+  namespace: daisy-operator-system
+---
+apiVersion: v1
+data:
+  controller_manager_config.yaml: |-
+    apiVersion: controller-runtime.sigs.k8s.io/v1alpha1
+    kind: ControllerManagerConfig
+    health:
+      healthProbeBindAddress: :8081
+    metrics:
+      bindAddress: 127.0.0.1:8080
+    webhook:
+      port: 9443
+    leaderElection:
+      leaderElect: true
+      resourceName: 8a30d6a4.daisy.com
+kind: ConfigMap
+metadata:
+  name: daisy-operator-manager-config
+  namespace: daisy-operator-system
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    control-plane: controller-manager
+  name: daisy-operator-controller-manager-metrics-service
+  namespace: daisy-operator-system
+spec:
+  ports:
+  - name: https
+    port: 8443
+    targetPort: https
+  selector:
+    control-plane: controller-manager
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: daisy-operator-webhook-service
+  namespace: daisy-operator-system
+spec:
+  ports:
+  - port: 443
+    targetPort: 9443
+  selector:
+    control-plane: controller-manager
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    control-plane: controller-manager
+  name: daisy-operator-controller-manager
+  namespace: daisy-operator-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      control-plane: controller-manager
+  template:
+    metadata:
+      labels:
+        control-plane: controller-manager
+    spec:
+      containers:
+      - args:
+        - --config=controller_manager_config.yaml
+        command:
+        - /manager
+        image: registry.foundary.zone:8360/dae/daisy-operator:v0.4
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        name: manager
+        ports:
+        - containerPort: 9443
+          name: webhook-server
+          protocol: TCP
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 100m
+            memory: 30Mi
+          requests:
+            cpu: 100m
+            memory: 20Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+        volumeMounts:
+        - mountPath: /tmp/k8s-webhook-server/serving-certs
+          name: cert
+          readOnly: true
+        - mountPath: /controller_manager_config.yaml
+          name: manager-config
+          subPath: controller_manager_config.yaml
+        - mountPath: /etc/clickhouse-operator/conf.d
+          name: etc-clickhouse-operator-confd-folder
+        - mountPath: /etc/clickhouse-operator/config.d
+          name: etc-clickhouse-operator-configd-folder
+        - mountPath: /etc/clickhouse-operator/templates.d
+          name: etc-clickhouse-operator-templatesd-folder
+        - mountPath: /etc/clickhouse-operator/users.d
+          name: etc-clickhouse-operator-usersd-folder
+      - args:
+        - --secure-listen-address=0.0.0.0:8443
+        - --upstream=http://127.0.0.1:8080/
+        - --logtostderr=true
+        - --v=10
+        image: registry.foundary.zone:8360/dae/kube-rbac-proxy:v0.5.0
+        name: kube-rbac-proxy
+        ports:
+        - containerPort: 8443
+          name: https
+      securityContext:
+        runAsUser: 65532
+      terminationGracePeriodSeconds: 10
+      volumes:
+      - name: cert
+        secret:
+          defaultMode: 420
+          secretName: webhook-server-cert
+      - configMap:
+          name: daisy-operator-manager-config
+        name: manager-config
+      - configMap:
+          name: daisy-operator-etc-clickhouse-operator-confd-files
+        name: etc-clickhouse-operator-confd-folder
+      - configMap:
+          name: daisy-operator-etc-clickhouse-operator-configd-files
+        name: etc-clickhouse-operator-configd-folder
+      - configMap:
+          name: daisy-operator-etc-clickhouse-operator-templatesd-files
+        name: etc-clickhouse-operator-templatesd-folder
+      - configMap:
+          name: daisy-operator-etc-clickhouse-operator-usersd-files
+        name: etc-clickhouse-operator-usersd-folder
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: daisy-operator-serving-cert
+  namespace: daisy-operator-system
+spec:
+  dnsNames:
+  - daisy-operator-webhook-service.daisy-operator-system.svc
+  - daisy-operator-webhook-service.daisy-operator-system.svc.cluster.local
+  issuerRef:
+    kind: Issuer
+    name: daisy-operator-selfsigned-issuer
+  secretName: webhook-server-cert
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: daisy-operator-selfsigned-issuer
+  namespace: daisy-operator-system
+spec:
+  selfSigned: {}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  annotations:
+    cert-manager.io/inject-ca-from: daisy-operator-system/daisy-operator-serving-cert
+  name: daisy-operator-mutating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: daisy-operator-webhook-service
+      namespace: daisy-operator-system
+      path: /mutate-daisy-com-v1-daisyinstallation
+  failurePolicy: Fail
+  name: mdaisyinstallation.kb.io
+  objectSelector:
+    matchExpressions:
+    - key: daisy.com/daisy-webhook-default
+      operator: DoesNotExist
+  rules:
+  - apiGroups:
+    - daisy.com
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - daisyinstallations
+  sideEffects: None
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  annotations:
+    cert-manager.io/inject-ca-from: daisy-operator-system/daisy-operator-serving-cert
+  name: daisy-operator-validating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: daisy-operator-webhook-service
+      namespace: daisy-operator-system
+      path: /validate-daisy-com-v1-daisyinstallation
+  failurePolicy: Fail
+  name: vdaisyinstallation.kb.io
+  rules:
+  - apiGroups:
+    - daisy.com
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - daisyinstallations
+  sideEffects: None

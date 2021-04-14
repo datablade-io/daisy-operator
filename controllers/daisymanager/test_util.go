@@ -3,10 +3,11 @@ package daisymanager
 import (
 	"context"
 	"fmt"
-	"github.com/daisy/daisy-operator/pkg/daisy"
-	"github.com/daisy/daisy-operator/pkg/k8s"
+	"os"
+
 	"github.com/go-logr/logr"
 	. "github.com/onsi/gomega"
+
 	apps "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apiextensions-apiserver/examples/client-go/pkg/client/clientset/versioned/scheme"
@@ -14,12 +15,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
-	"os"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/daisy/daisy-operator/api/v1"
+	"github.com/daisy/daisy-operator/pkg/daisy"
+	"github.com/daisy/daisy-operator/pkg/k8s"
 	"github.com/daisy/daisy-operator/pkg/label"
 )
 

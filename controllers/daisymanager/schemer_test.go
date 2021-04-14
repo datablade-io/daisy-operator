@@ -1,12 +1,12 @@
 package daisymanager
 
 import (
-	v1 "github.com/daisy/daisy-operator/api/v1"
-	testing2 "github.com/go-logr/logr/testing"
 	"testing"
 
 	"github.com/go-logr/logr"
+	testing2 "github.com/go-logr/logr/testing"
 
+	v1 "github.com/daisy/daisy-operator/api/v1"
 	"github.com/daisy/daisy-operator/pkg/daisy"
 )
 

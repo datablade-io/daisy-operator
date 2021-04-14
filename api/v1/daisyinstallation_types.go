@@ -48,6 +48,10 @@ const (
 
 // DaisyInstallationSpec defines the desired state of DaisyInstallation
 type DaisyInstallationSpec struct {
+	//for validate configuration
+	// +kubebuilder:validation:Optional
+	Validate Validate `json:"validate,omitempty"              yaml:"validate"`
+
 	// Specify a Service Account
 	ServiceAccount string `json:"serviceAccount,omitempty"`
 
@@ -90,6 +94,12 @@ type DaisyInstallationSpec struct {
 	// UseTemplates, templates used by Installation
 	// +kubebuilder:validation:Optional
 	UseTemplates []UseTemplate `json:"useTemplates,omitempty"           yaml:"useTemplates"`
+}
+
+type Validate struct {
+	// switch for close volume expand valid
+	// +kubebuilder:validation:Optional
+	NoValidateStorageClass bool `json:"noValidateStorageClass,omitempty"           yaml:"noValidateStorageClass"`
 }
 
 // UseTemplate defines UseTemplates section
