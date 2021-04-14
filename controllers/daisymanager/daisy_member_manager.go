@@ -723,7 +723,7 @@ func (m *DaisyMemberManager) syncStatefulSet(ctx *memberContext, di *v1.DaisyIns
 			Namespace: ns,
 			Name:      podName,
 		}, &pod)
-		if pod.Labels != nil && pod.Labels["daisy.com/sync-state"] != "Synced"{
+		if pod.Labels != nil && pod.Labels["daisy.com/sync-state"] != "Synced" {
 			pod.Labels["daisy.com/sync-state"] = "Synced"
 			m.deps.Client.Update(context.Background(), &pod)
 		}
@@ -738,7 +738,7 @@ func (m *DaisyMemberManager) syncStatefulSet(ctx *memberContext, di *v1.DaisyIns
 		if err != nil {
 			return result, err
 		}
-		newSet.Spec.Template.ObjectMeta.Labels["daisy.com/sync-state"] = "NotSync"
+		//newSet.Spec.Template.ObjectMeta.Labels["daisy.com/sync-state"] = "NotSync"
 		if err = m.deps.Client.Create(context.Background(), newSet); err != nil {
 			return result, err
 		}
