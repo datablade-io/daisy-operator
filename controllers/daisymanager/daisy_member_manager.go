@@ -18,8 +18,11 @@ package daisymanager
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/go-logr/logr"
+
 	apps "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
@@ -376,6 +379,7 @@ func (m *DaisyMemberManager) syncService(ctx *memberContext, di *v1.DaisyInstall
 			return err
 		}
 		m.deps.Recorder.Eventf(di, corev1.EventTypeNormal, "Created", "Created Service %q", newSvc.Name)
+		newSvc.Labels["daisy.com/sync-state"] = "Synced"
 		return m.deps.Client.Create(context.Background(), newSvc)
 	}
 
@@ -671,6 +675,8 @@ func (m *DaisyMemberManager) syncReplica(ctx *memberContext, di *v1.DaisyInstall
 		status.State = v1.Sync
 		di.Status.SetReplicaStatus(ctx.CurCluster, ctx.CurShard, replica.Name, *status)
 		di.Status.ReadyReplicas++
+	} else {
+		log.Info("some other fork syncReplica")
 	}
 
 	return nil, nil
@@ -706,6 +712,23 @@ func (m *DaisyMemberManager) syncStatefulSet(ctx *memberContext, di *v1.DaisyIns
 	}
 
 	newSet, err := getStatefulSetForReplica(ctx, di, replica)
+	if di.Status.Clusters[ctx.CurCluster].Shards[ctx.CurShard].Replicas[replica.Name].State == "Sync" {
+		//copy := oldSet.DeepCopy()
+		//copy.Labels["daisy.com/sync-state"] = "Synced"
+		//copy.Spec.Template.Labels["daisy.com/sync-state"]  = "Synced"
+		//m.deps.Client.Update(context.Background(), copy)
+		podName := replica.Name + "-0"
+		var pod = corev1.Pod{}
+		m.deps.Client.Get(context.Background(), client.ObjectKey{
+			Namespace: ns,
+			Name:      podName,
+		}, &pod)
+		if pod.Labels != nil && pod.Labels["daisy.com/sync-state"] != "Synced" {
+			pod.Labels["daisy.com/sync-state"] = "Synced"
+			m.deps.Client.Update(context.Background(), &pod)
+		}
+
+	}
 	if err != nil {
 		return result, err
 	}
@@ -715,6 +738,7 @@ func (m *DaisyMemberManager) syncStatefulSet(ctx *memberContext, di *v1.DaisyIns
 		if err != nil {
 			return result, err
 		}
+		//newSet.Spec.Template.ObjectMeta.Labels["daisy.com/sync-state"] = "NotSync"
 		if err = m.deps.Client.Create(context.Background(), newSet); err != nil {
 			return result, err
 		}
@@ -725,36 +749,6 @@ func (m *DaisyMemberManager) syncStatefulSet(ctx *memberContext, di *v1.DaisyIns
 		}
 		return result, k8s.RequeueErrorf("DaisyInstallation: [%s/%s], waiting for replica [%s] running", ns, dcName, replica.Name)
 	}
-
-	//if _, err := m.setStoreLabelsForTiKV(di); err != nil {
-	//	return err
-	//}
-
-	// Scaling takes precedence over upgrading because:
-	// - if a store fails in the upgrading, users may want to delete it or add
-	//   new replicas
-	// - it's ok to scale in the middle of upgrading (in statefulset controller
-	//   scaling takes precedence over upgrading too)
-	//if err := m.scaler.Scale(di, oldSet, newSet); err != nil {
-	//	return err
-	//}
-
-	// Perform failover logic if necessary. Note that this will only update
-	// TidbCluster status. The actual scaling performs in next sync loop (if a
-	// new replica needs to be added).
-	//if m.deps.CLIConfig.AutoFailover && di.Spec.TiKV.MaxFailoverCount != nil {
-	//	if di.AllPodsStarted() && !di.AllStoresReady() {
-	//		if err := m.failover.Failover(di); err != nil {
-	//			return err
-	//		}
-	//	}
-	//}
-
-	//if !templateEqual(newSet, oldSet) || di.Status.Phase == v1.UpgradePhase {
-	//	if err := m.upgrader.Upgrade(di, oldSet, newSet); err != nil {
-	//		return err
-	//	}
-	//}
 
 	// Update StatefulSet
 	var recreate bool
@@ -784,6 +778,30 @@ func (m *DaisyMemberManager) syncStatefulSet(ctx *memberContext, di *v1.DaisyIns
 	err = m.syncRepliaStatus(ctx, di, newSet, result)
 
 	return result, err
+}
+
+func getPreReplicaStatus(di *v1.DaisyInstallation, name string) string {
+	if name == "" {
+		return ""
+	}
+	return di.Status.Clusters["cluster"].Shards[getClusterName(name)].Replicas[name].State
+}
+
+func getPreReplicatName(name string) string {
+	nameSlice := strings.Split(name, "-")
+	clusterName := getClusterName(name)
+	replicaNum, _ := strconv.Atoi(nameSlice[3])
+	if replicaNum == 0 {
+		return ""
+	}
+	replicaNum--
+	return fmt.Sprintf("%s-%d", clusterName, replicaNum)
+}
+
+func getClusterName(name string) string {
+	nameSlice := strings.Split(name, "-")
+	clusterName := nameSlice[0] + "-" + nameSlice[1] + "-" + nameSlice[2]
+	return clusterName
 }
 
 func (m *DaisyMemberManager) handleVolumeExpansion(di *v1.DaisyInstallation, cur, old *apps.StatefulSet, validateStorageClass bool) (bool, error) {
