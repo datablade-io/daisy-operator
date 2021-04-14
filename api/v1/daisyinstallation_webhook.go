@@ -17,6 +17,8 @@ limitations under the License.
 package v1
 
 import (
+	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -24,7 +26,7 @@ import (
 )
 
 // log is for logging in this package.
-var daisyinstallationlog = logf.Log.WithName("daisyinstallation-resource")
+var daisyinstallationlog = logf.Log.WithName("daisyinstallation-webhook")
 
 func (r *DaisyInstallation) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
@@ -43,6 +45,11 @@ func (r *DaisyInstallation) Default() {
 	daisyinstallationlog.Info("default", "name", r.Name)
 
 	// TODO(user): fill in your defaulting logic.
+	// To avoid call Default() multi times when requeue
+	if r.Labels == nil {
+		r.Labels = make(map[string]string)
+	}
+	r.Labels["daisy.com/daisy-webhook-default"] = "handled"
 }
 
 // TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
@@ -53,17 +60,20 @@ var _ webhook.Validator = &DaisyInstallation{}
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (r *DaisyInstallation) ValidateCreate() error {
 	daisyinstallationlog.Info("validate create", "name", r.Name)
-
-	// TODO(user): fill in your validation logic upon object creation.
+	if r.Spec.Templates.VolumeClaimTemplates !=nil{
+		return ValidateStorageLimit(r)
+	}
 	return nil
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *DaisyInstallation) ValidateUpdate(old runtime.Object) error {
 	daisyinstallationlog.Info("validate update", "name", r.Name)
-
-	// TODO(user): fill in your validation logic upon object update.
+	if r.Spec.Templates.VolumeClaimTemplates !=nil{
+		return ValidateStorageLimit(r)
+	}
 	return nil
+
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
@@ -71,5 +81,21 @@ func (r *DaisyInstallation) ValidateDelete() error {
 	daisyinstallationlog.Info("validate delete", "name", r.Name)
 
 	// TODO(user): fill in your validation logic upon object deletion.
+	return nil
+}
+
+func ValidateStorageLimit(installation *DaisyInstallation) error {
+
+	ds := installation.Spec.Templates.VolumeClaimTemplates[0].Spec.Resources.Requests.Storage()
+	ls := installation.Spec.Templates.VolumeClaimTemplates[1].Spec.Resources.Requests.Storage()
+	dataStorageMinSize := resource.MustParse("1Gi")
+	logStorageMinSize := resource.MustParse("100Mi")
+	if ds.Cmp(dataStorageMinSize) <0 {
+		err :=  errors.Errorf("unreasonable data volume storage")
+		return err
+	}else if ls.Cmp(logStorageMinSize) <0 {
+		err :=  errors.Errorf("unreasonable log volume storage")
+		return err
+	}
 	return nil
 }

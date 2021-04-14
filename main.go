@@ -59,6 +59,7 @@ func main() {
 	var enableLeaderElection bool
 	var probeAddr string
 	var configPath string
+	var certDir string
 
 	pflag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	pflag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -66,6 +67,7 @@ func main() {
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
 	pflag.StringVar(&configPath, "config", "./config.yaml", "The path of daisy operator config file")
+	pflag.StringVar(&certDir, "cert-dir", "", "The path of certificate used by webhook")
 
 	opts := zapcr.Options{
 		Development: true,
@@ -99,6 +101,7 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "8a30d6a4.daisy.com",
+		CertDir:                certDir,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -133,10 +136,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	//if err = (&v1.DaisyInstallation{}).SetupWebhookWithManager(mgr); err != nil {
-	//	setupLog.Error(err, "unable to create webhook", "webhook", "DaisyInstallation")
-	//	os.Exit(1)
-	//}
+	if err = (&v1.DaisyInstallation{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "DaisyInstallation")
+		os.Exit(1)
+	}
 
 	if err = (&controllers.DaisyTemplateReconciler{
 		Client: mgr.GetClient(),
