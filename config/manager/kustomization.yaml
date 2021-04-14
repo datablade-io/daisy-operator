@@ -4,36 +4,35 @@ resources:
 generatorOptions:
   disableNameSuffixHash: true
 
-configMapGenerator:
 # config of operator
+
+# daisy server templates: config.d/*.xml
+
+# daisy server templates: users.d/*.xml
+
+# daisy server templates: conf.d/*.xml
+
+# daisy server templates: templates.d/*.json.example
+configMapGenerator:
 - files:
   - controller_manager_config.yaml
   name: manager-config
-
-# daisy server templates: config.d/*.xml
 - files:
   - config/config.d/01-clickhouse-listen.xml
   - config/config.d/02-clickhouse-logger.xml
   - config/config.d/03-clickhouse-querylog.xml
   - config/config.d/04-clickhouse-partlog.xml
   name: etc-clickhouse-operator-configd-files
-
-# daisy server templates: users.d/*.xml
 - files:
-    - config/users.d/01-clickhouse-user.xml
-    - config/users.d/02-clickhouse-default-profile.xml
+  - config/users.d/01-clickhouse-user.xml
+  - config/users.d/02-clickhouse-default-profile.xml
   name: etc-clickhouse-operator-usersd-files
-
-# daisy server templates: conf.d/*.xml
+- name: etc-clickhouse-operator-confd-files
 - files:
-  name: etc-clickhouse-operator-confd-files
-
-# daisy server templates: templates.d/*.json.example
-- files:
-    - config/templates.d/001-templates.json
-    - config/templates.d/default-pod-template.yaml.example
-    - config/templates.d/default-storage-template.yaml
-    - config/users.d/02-clickhouse-default-profile.xml
+  - config/templates.d/001-templates.json
+  - config/templates.d/default-pod-template.yaml.example
+  - config/templates.d/default-storage-template.yaml
+  - config/users.d/02-clickhouse-default-profile.xml
   name: etc-clickhouse-operator-templatesd-files
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization

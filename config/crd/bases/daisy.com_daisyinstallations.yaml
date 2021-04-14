@@ -7233,6 +7233,13 @@ spec:
                   - useType
                   type: object
                 type: array
+              validate:
+                description: for validate configuration
+                properties:
+                  noValidateStorageClass:
+                    description: switch for close volume expand valid
+                    type: boolean
+                type: object
             required:
             - configuration
             type: object
@@ -15180,6 +15187,13 @@ spec:
                       - useType
                       type: object
                     type: array
+                  validate:
+                    description: for validate configuration
+                    properties:
+                      noValidateStorageClass:
+                        description: switch for close volume expand valid
+                        type: boolean
+                    type: object
                 required:
                 - configuration
                 type: object

@@ -2,16 +2,19 @@ package controllers
 
 import (
 	"context"
-	v1 "github.com/daisy/daisy-operator/api/v1"
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"time"
+
+	v1 "github.com/daisy/daisy-operator/api/v1"
 )
 
 var _ = Describe("DaisyInstallation Controller", func() {

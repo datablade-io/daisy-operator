@@ -37,8 +37,8 @@ func TestDaisyInstallation_ValidateCreate(t *testing.T) {
 				Spec: DaisyInstallationSpec{
 					Templates: Templates{
 						VolumeClaimTemplates: []VolumeClaimTemplate{
-							newVolumeClaimTemplate("dataTest1", "1Gi", "standard"),
-							newVolumeClaimTemplate("logTest1", "100Mi", "standard"),
+							newVolumeClaimTemplate("data-volume-template", "1Gi", "standard"),
+							newVolumeClaimTemplate("log-volume-template", "100Mi", "standard"),
 						},
 					},
 				},
@@ -58,10 +58,16 @@ func TestDaisyInstallation_ValidateCreate(t *testing.T) {
 					UID:       "test",
 				},
 				Spec: DaisyInstallationSpec{
+					Defaults: Defaults{
+						Templates: TemplateNames{
+							DataVolumeClaimTemplate: "data-volume-template",
+							LogVolumeClaimTemplate:  "log-volume-template",
+						},
+					},
 					Templates: Templates{
 						VolumeClaimTemplates: []VolumeClaimTemplate{
-							newVolumeClaimTemplate("dataTest1", "1Gi", "standard"),
-							newVolumeClaimTemplate("logTest1", "64Mi", "standard"),
+							newVolumeClaimTemplate("data-volume-template", "1Gi", "standard"),
+							newVolumeClaimTemplate("log-volume-template", "64Mi", "standard"),
 						},
 					},
 				},
@@ -113,10 +119,16 @@ func TestDaisyInstallation_ValidateUpdate(t *testing.T) {
 					UID:       "test",
 				},
 				Spec: DaisyInstallationSpec{
+					Defaults: Defaults{
+						Templates: TemplateNames{
+							DataVolumeClaimTemplate: "data-volume-template",
+							LogVolumeClaimTemplate:  "log-volume-template",
+						},
+					},
 					Templates: Templates{
 						VolumeClaimTemplates: []VolumeClaimTemplate{
-							newVolumeClaimTemplate("dataTest1", "1Gi", "standard"),
-							newVolumeClaimTemplate("logTest1", "100Mi", "standard"),
+							newVolumeClaimTemplate("data-volume-template", "1Gi", "standard"),
+							newVolumeClaimTemplate("log-volume-template", "100Mi", "standard"),
 						},
 					},
 				},
@@ -136,10 +148,16 @@ func TestDaisyInstallation_ValidateUpdate(t *testing.T) {
 					UID:       "test",
 				},
 				Spec: DaisyInstallationSpec{
+					Defaults: Defaults{
+						Templates: TemplateNames{
+							DataVolumeClaimTemplate: "data-volume-template",
+							LogVolumeClaimTemplate:  "log-volume-template",
+						},
+					},
 					Templates: Templates{
 						VolumeClaimTemplates: []VolumeClaimTemplate{
-							newVolumeClaimTemplate("dataTest1", "500Mi", "standard"),
-							newVolumeClaimTemplate("logTest1", "100Mi", "standard"),
+							newVolumeClaimTemplate("data-volume-template", "500Mi", "standard"),
+							newVolumeClaimTemplate("log-volume-template", "100Mi", "standard"),
 						},
 					},
 				},
