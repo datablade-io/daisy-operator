@@ -723,10 +723,10 @@ func (m *DaisyMemberManager) syncStatefulSet(ctx *memberContext, di *v1.DaisyIns
 			Namespace: ns,
 			Name:      podName,
 		}, &pod)
-		if pod.Labels != nil {
+		if pod.Labels != nil && pod.Labels["daisy.com/sync-state"] != "Synced"{
 			pod.Labels["daisy.com/sync-state"] = "Synced"
+			m.deps.Client.Update(context.Background(), &pod)
 		}
-		m.deps.Client.Update(context.Background(), &pod)
 
 	}
 	if err != nil {
@@ -738,6 +738,7 @@ func (m *DaisyMemberManager) syncStatefulSet(ctx *memberContext, di *v1.DaisyIns
 		if err != nil {
 			return result, err
 		}
+		newSet.Spec.Template.ObjectMeta.Labels["daisy.com/sync-state"] = "NotSync"
 		if err = m.deps.Client.Create(context.Background(), newSet); err != nil {
 			return result, err
 		}
@@ -748,36 +749,6 @@ func (m *DaisyMemberManager) syncStatefulSet(ctx *memberContext, di *v1.DaisyIns
 		}
 		return result, k8s.RequeueErrorf("DaisyInstallation: [%s/%s], waiting for replica [%s] running", ns, dcName, replica.Name)
 	}
-
-	//if _, err := m.setStoreLabelsForTiKV(di); err != nil {
-	//	return err
-	//}
-
-	// Scaling takes precedence over upgrading because:
-	// - if a store fails in the upgrading, users may want to delete it or add
-	//   new replicas
-	// - it's ok to scale in the middle of upgrading (in statefulset controller
-	//   scaling takes precedence over upgrading too)
-	//if err := m.scaler.Scale(di, oldSet, newSet); err != nil {
-	//	return err
-	//}
-
-	// Perform failover logic if necessary. Note that this will only update
-	// TidbCluster status. The actual scaling performs in next sync loop (if a
-	// new replica needs to be added).
-	//if m.deps.CLIConfig.AutoFailover && di.Spec.TiKV.MaxFailoverCount != nil {
-	//	if di.AllPodsStarted() && !di.AllStoresReady() {
-	//		if err := m.failover.Failover(di); err != nil {
-	//			return err
-	//		}
-	//	}
-	//}
-
-	//if !templateEqual(newSet, oldSet) || di.Status.Phase == v1.UpgradePhase {
-	//	if err := m.upgrader.Upgrade(di, oldSet, newSet); err != nil {
-	//		return err
-	//	}
-	//}
 
 	// Update StatefulSet
 	var recreate bool

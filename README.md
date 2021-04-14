@@ -28,7 +28,7 @@ make all
 ### Build docker image & push to docker registry
 
 ```
-make docker-build docker-push IMG=registry.foundary.zone:8360/dae/daisy-operator:v0.1
+make docker-build docker-push IMG=registry.foundary.zone:8360/dae/daisy-operator:v0.2
 ```
 
 ## Run
@@ -50,7 +50,7 @@ define in default context to install daisy operator
 make install
 
 // deploy daisy operator
-make deploy IMG=registry.foundary.zone:8360/dae/daisy-operator:v0.1
+make deploy IMG=registry.foundary.zone:8360/dae/daisy-operator:v0.2
 ```
 
 ## Tests

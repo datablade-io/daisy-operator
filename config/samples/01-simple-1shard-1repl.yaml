@@ -15,5 +15,5 @@ spec:
       cluster:
         name: cluster
         layout:
-          shardsCount: 2
-          replicasCount:  2
+          shardsCount: 1
+          replicasCount:  1
