@@ -1,0 +1,10 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  creationTimestamp: null
+  name: mutating-webhook-configuration
+webhooks:
+- name: mdaisyinstallation.kb.io
+  objectSelector:
+    matchExpressions:
+      - { key: daisy.com/daisy-webhook-default, operator: DoesNotExist }

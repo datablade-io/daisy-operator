@@ -1,0 +1,11 @@
+bases:
+- ../webhook
+
+resources:
+- namespaces.yaml
+# +kubebuilder:scaffold:crdkustomizeresource
+
+patchesStrategicMerge:
+- patches/mutating_webhook_configuration.yaml
+- patches/validating_webhook_configuration.yaml
+
