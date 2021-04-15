@@ -47,7 +47,7 @@ type DaisyInstallationReconciler struct {
 // +kubebuilder:rbac:groups=daisy.com,resources=daisyoperatorconfigurations/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=daisy.com,resources=daisyoperatorconfigurations/finalizers,verbs=update
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=services;configmaps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=services;configmaps;persistentvolumeclaims;pods,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
