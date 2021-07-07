@@ -10,18 +10,57 @@ spec:
       logVolumeClaimTemplate: log-volume-template
   pvReclaimPolicy: Retain
   configuration:
+    zookeeper:
+      nodes:
+        - host: tob44.bigdata.lycc.qihoo.net
+          port: 2181
+      session_timeout_ms: 30000
+      operation_timeout_ms: 10000
+      root: "/simple01"
     users:
-      default/networks/ip:
+      # test user has 'password' specified, while admin user has 'password_sha256_hex' specified
+      test/password: qwerty
+      test/networks/ip:
         - "0.0.0.0/0"
+      test/profile: test_profile
+      test/quota: test_quota
+      test/allow_databases/database:
+        - "dbname1"
+        - "dbname2"
+        - "dbname3"
+      # admin use has 'password_sha256_hex' so actual password value is not published
+      admin/password_sha256_hex: 8bd66e4932b4968ec111da24d7e42d399a05cb90bf96f587c3fa191c56c401f8
+      admin/networks/ip: "0.0.0.0/0"
+      admin/profile: default
+      admin/quota: default
+      # readonly user has 'password' field specified, not 'password_sha256_hex' as admin user above
+      readonly/password: readonly_password
+      readonly/profile: readonly
+      readonly/quota: default
+    profiles:
+      test_profile/max_memory_usage: "1000000000"
+      test_profile/readonly: "1"
+      readonly/readonly: "1"
+    quotas:
+      test_quota/interval/duration: "3600"
     settings:
-      listen_host:
-        - "0.0.0.0"
+      listen_host: "0.0.0.0"
+      compression/case/method: zstd
+      disable_internal_dns_cache: 1
+    files:
+      dict1.xml: |
+        <yandex>
+            <!-- ref to file /etc/clickhouse-data/config.d/source1.csv -->
+        </yandex>
+      source1.csv: |
+        a1,b1,c1,d1
+        a2,b2,c2,d2
     clusters:
       cluster:
         name: cluster
         layout:
-          shardsCount: 1
-          replicasCount:  1
+          shardsCount: 2
+          replicasCount: 2
   templates:
     podTemplates:
       - name: pod-template
@@ -31,7 +70,7 @@ spec:
           containers:
             - name: clickhouse
               imagePullPolicy: Always
-              image: yandex/clickhouse-server:latest
+              image: registry.foundary.zone:8360/dae-dev/daisy-server:1.2.0
               resources:
                 limits:
                   memory: "512Mi"
@@ -42,7 +81,7 @@ spec:
     volumeClaimTemplates:
       - name: data-volume-template
         spec:
-          storageClassName: standard
+          storageClassName:  kubevirt-hostpath-provisioner
           accessModes:
             - ReadWriteOnce
           resources:
@@ -50,7 +89,7 @@ spec:
               storage: 1Gi
       - name: log-volume-template
         spec:
-          storageClassName: standard
+          storageClassName:  kubevirt-hostpath-provisioner
           accessModes:
             - ReadWriteOnce
           resources:

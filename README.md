@@ -2,7 +2,7 @@
 
 - Go 1.15+
 - operator-sdk 1.3.0
-- kubernetes 1.16+ (support PVC expasion)
+- kubernetes 1.16+ (support PVC expansion)
 
 ## Generate client & crds & other yaml files
 ```
