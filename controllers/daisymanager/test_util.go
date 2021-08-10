@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/gomega"
@@ -85,12 +86,23 @@ func newChecker(di *v1.DaisyInstallation, g *GomegaWithT) *checker {
 	}
 }
 
+// TODO: replace it with veryifyAllReplicas()
 func (c *checker) verifyReplicas(cli client.Client) {
 	sets := apps.StatefulSetList{}
 	err := cli.List(context.Background(), &sets, client.InNamespace("default"))
 	c.g.Expect(err).Should(BeNil())
 	for _, set := range sets.Items {
 		c.checkStatefulSet(&set)
+	}
+}
+
+func (c *checker) verifyAllReplica(cli client.Client, fn func(set *apps.StatefulSet, g *GomegaWithT)) {
+	sets := apps.StatefulSetList{}
+	err := cli.List(context.Background(), &sets, client.InNamespace("default"))
+	c.g.Expect(err).Should(BeNil())
+	c.g.Expect(len(sets.Items) > 0).Should(BeTrue())
+	for _, set := range sets.Items {
+		fn(&set, c.g)
 	}
 }
 
@@ -112,6 +124,21 @@ func (c *checker) checkServiceCount(cli client.Client, expect int) {
 	c.g.Expect(cli.List(context.Background(), &svcs, client.InNamespace(c.ctx.Namespace))).
 		Should(Succeed())
 	c.g.Expect(len(svcs.Items)).To(Equal(expect))
+}
+
+func (c *checker) checkConfigMap(cli client.Client, cmName string, file string, expects []string) {
+	cm := corev1.ConfigMap{}
+	err := cli.Get(context.Background(), client.ObjectKey{Name: cmName, Namespace: c.ctx.Namespace}, &cm)
+	c.g.ExpectWithOffset(1, err).Should(BeNil())
+	c.g.ExpectWithOffset(1, cm.Data[file]).ShouldNot(BeNil())
+	found := true
+	for _, expect := range expects {
+		if !strings.Contains(cm.Data[file], expect) {
+			found = false
+			break
+		}
+	}
+	c.g.ExpectWithOffset(1, found).Should(BeTrue())
 }
 
 func (c *checker) checkConfigMapCount(cli client.Client, expect int) {

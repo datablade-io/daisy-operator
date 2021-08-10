@@ -111,6 +111,7 @@ func (n *Normalizer) normalizeInstallation(di *v1.DaisyInstallation) (*Normalize
 // normalizeConfiguration normalizes .spec.configuration
 func (n *Normalizer) normalizeConfiguration(di *v1.DaisyInstallation, conf *v1.Configuration) {
 	n.normalizeConfigurationZookeeper(&conf.Zookeeper)
+	n.normalizeConfigurationKafka(&conf.Kafka)
 
 	n.normalizeConfigurationUsers(&conf.Users)
 	n.normalizeConfigurationProfiles(&conf.Profiles)
@@ -186,6 +187,23 @@ func (n *Normalizer) normalizeConfigurationZookeeper(zk *v1.ZookeeperConfig) {
 		node := &zk.Nodes[i]
 		if node.Port == 0 {
 			node.Port = zkDefaultPort
+		}
+	}
+
+	// In case no ZK root specified - assign '/clickhouse/{namespace}/{chi name}'
+	//if zk.Root == "" {
+	//	zk.Root = fmt.Sprintf(zkDefaultRootTemplate, n.chi.Namespace, n.chi.Name)
+	//}
+}
+
+// normalizeConfigurationKafka normalizes .spec.configuration.kafka
+func (n *Normalizer) normalizeConfigurationKafka(kc *v1.KafkaConfig) {
+	// In case no ZK port specified - assign default
+	for i := range kc.Nodes {
+		// Convenience wrapper
+		node := &kc.Nodes[i]
+		if node.Port == 0 {
+			node.Port = kafkaDefaultPort
 		}
 	}
 
@@ -342,6 +360,10 @@ func (n *Normalizer) normalizeCluster(di *v1.DaisyInstallation, cluster *v1.Clus
 
 	// Inherit from .spec.configuration.zookeeper
 	cluster.InheritZookeeperFrom(n.di)
+
+	// Inherit from .spec.configuration.kafka
+	cluster.InheritKafkaFrom(n.di)
+
 	// Inherit from .spec.configuration.files
 	cluster.InheritFilesFrom(n.di)
 	//// Inherit from .spec.defaults
@@ -350,12 +372,14 @@ func (n *Normalizer) normalizeCluster(di *v1.DaisyInstallation, cluster *v1.Clus
 	n.normalizeConfigurationZookeeper(&cluster.Zookeeper)
 	n.normalizeConfigurationSettings(&cluster.Settings)
 	n.normalizeConfigurationFiles(&cluster.Files)
-
 	n.normalizeClusterLayoutShardsCountAndReplicasCount(&cluster.Layout)
 
 	n.ensureClusterLayoutShards(di, cluster)
 	//n.ensureClusterLayoutReplicas(&cluster.Layout)
 
+	if n.di.Spec.ClusterType == "DistributedMergeTree" {
+		n.selectClusterMaster(n.di, cluster)
+	}
 	// Loop over all shards and replicas inside shards and fill structure
 	cluster.EnumerateShards(di, func(name string, shard *v1.Shard, di *v1.DaisyInstallation, cluster *v1.Cluster) error {
 		n.normalizeShard(shard, di, cluster)
@@ -368,6 +392,13 @@ func (n *Normalizer) normalizeCluster(di *v1.DaisyInstallation, cluster *v1.Clus
 	// extra shard should be supported as well
 
 	return nil
+}
+
+func (n *Normalizer) selectClusterMaster(di *v1.DaisyInstallation, cluster *v1.Cluster) {
+	if len(cluster.Layout.Master) == 0 {
+		// TODO: adapt to delete slot, now just make the first replica to be the master
+		cluster.Layout.Master = CreateReplicaName(n.createShardName(di.Name, cluster.Name, 0), 0, nil)
+	}
 }
 
 // normalizeClusterLayoutShardsCountAndReplicasCount ensures at least 1 shard and 1 replica counters
@@ -545,9 +576,14 @@ func (n *Normalizer) normalizeReplicas(shard *v1.Shard, di *v1.DaisyInstallation
 	for len(shard.Replicas) < shard.ReplicaCount {
 		// We still have some assumed hosts in this shard - let's add it as replicaIndex
 		replicaIndex := len(shard.Replicas)
-		// Check whether we have this host in HostsField
+
 		replica := v1.Replica{
 			Name: CreateReplicaName(shard.Name, replicaIndex, skip),
+		}
+		if replica.Name == cluster.Layout.Master {
+			replica.Role = "master"
+		} else {
+			replica.Role = "slave"
 		}
 		//shard.Replicas[replica.Name] = replica
 		n.normalizeReplica(&replica, shard, cluster, replicaIndex, skip)

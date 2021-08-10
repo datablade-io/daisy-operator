@@ -76,14 +76,24 @@ func (c *configSectionsGenerator) CreateConfigsUsers() map[string]string {
 func (c *configSectionsGenerator) CreateConfigsHost(ctx *memberContext, di *v1.DaisyInstallation, replica *v1.Replica) map[string]string {
 	// Prepare for this replica deployment config files map as filename->content
 	hostConfigSections := make(map[string]string)
-	util.IncludeNonEmpty(hostConfigSections, createConfigSectionFilename(configMacros), c.configGenerator.GetHostMacros(ctx, replica))
-	util.IncludeNonEmpty(hostConfigSections, createConfigSectionFilename(configPorts), c.configGenerator.GetHostPorts(replica))
-	util.IncludeNonEmpty(hostConfigSections, createConfigSectionFilename(configZookeeper), c.configGenerator.GetHostZookeeper(ctx, di, replica))
-	util.IncludeNonEmpty(hostConfigSections, createConfigSectionFilename(configSettings), c.configGenerator.GetSettings(replica))
-	util.MergeStringMaps(hostConfigSections, c.configGenerator.GetFiles(v1.SectionHost, true, replica))
-	// Extra user-specified config files
-	util.MergeStringMaps(hostConfigSections, c.config.CHHostConfigs)
 
+	if di.Spec.ClusterType == "DistributedMergeTree" {
+		util.IncludeNonEmpty(hostConfigSections, createConfigSectionFilename(configMacros), c.configGenerator.GetNodeRoles(ctx, replica))
+		util.IncludeNonEmpty(hostConfigSections, createConfigSectionFilename(configPorts), c.configGenerator.GetHostPorts(replica))
+		util.IncludeNonEmpty(hostConfigSections, createConfigSectionFilename(configZookeeper), c.configGenerator.GetHostKafka(ctx, di, replica))
+		util.IncludeNonEmpty(hostConfigSections, createConfigSectionFilename(configSettings), c.configGenerator.GetSettings(replica))
+		util.MergeStringMaps(hostConfigSections, c.configGenerator.GetFiles(v1.SectionHost, true, replica))
+		// Extra user-specified config files
+		util.MergeStringMaps(hostConfigSections, c.config.CHHostConfigs)
+	} else {
+		util.IncludeNonEmpty(hostConfigSections, createConfigSectionFilename(configMacros), c.configGenerator.GetHostMacros(ctx, replica))
+		util.IncludeNonEmpty(hostConfigSections, createConfigSectionFilename(configPorts), c.configGenerator.GetHostPorts(replica))
+		util.IncludeNonEmpty(hostConfigSections, createConfigSectionFilename(configZookeeper), c.configGenerator.GetHostZookeeper(ctx, di, replica))
+		util.IncludeNonEmpty(hostConfigSections, createConfigSectionFilename(configSettings), c.configGenerator.GetSettings(replica))
+		util.MergeStringMaps(hostConfigSections, c.configGenerator.GetFiles(v1.SectionHost, true, replica))
+		// Extra user-specified config files
+		util.MergeStringMaps(hostConfigSections, c.config.CHHostConfigs)
+	}
 	return hostConfigSections
 }
 

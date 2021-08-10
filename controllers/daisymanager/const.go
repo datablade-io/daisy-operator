@@ -127,6 +127,7 @@ const (
 	zkDefaultPort = 2181
 	// zkDefaultRootTemplate specifies default ZK root - /clickhouse/{namespace}/{chi name}
 	zkDefaultRootTemplate = "/clickhouse/%s/%s"
+	kafkaDefaultPort      = 9128
 
 	CHUsername = "default"
 	CHPassword = ""

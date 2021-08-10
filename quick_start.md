@@ -1,13 +1,13 @@
 # Quick Start Guides
 
 # Table of Contents
-* [ClickHouse Operator Installation](#daisy-operator-installation)
+* [Daisy Operator Installation](#daisy-operator-installation)
 * [Examples](#examples)
   * [Trivial Example](#trivial-example)
   * [Connect to ClickHouse Database](#connect-to-clickhouse-database)
   * [Simple Persistent Volume Example](#simple-persistent-volume-example)
-  * [Custom Deployment with Pod and VolumeClaim Templates](#custom-deployment-with-pod-and-volumeclaim-templates)
   * [Custom Deployment with Specific ClickHouse Configuration](#custom-deployment-with-specific-clickhouse-configuration)
+  * [Deploy a DistributedMergeTree Cluster](#deploy-a-distributedmergetree-cluster)
 
 # Prerequisites
 1. Operational Kubernetes cluster
@@ -24,7 +24,7 @@ Currently only availaible by Makefile. Please refer 'make deploy' task in [READM
 make install
 
 # deploy operator
-make deploy IMG=registry.foundary.zone:8360/dae/daisy-operator:v0.3
+make deploy IMG=registry.foundary.zone:8360/dae/daisy-operator:v0.5
 ```
 
 Install progress is as follows:
@@ -280,6 +280,82 @@ spec:
       source1.csv: |
         a1,b1,c1,d1
         a2,b2,c2,d2
+    clusters:
+      cluster:
+        name: cluster
+        layout:
+          shardsCount: 2
+          replicasCount: 2
+  templates:
+    podTemplates:
+      - name: pod-template
+        metadata:
+          name: "simple01"
+        spec:
+          containers:
+            - name: clickhouse
+              imagePullPolicy: Always
+              image: registry.foundary.zone:8360/dae-dev/daisy-server:1.2.0
+              resources:
+                limits:
+                  memory: "512Mi"
+                  cpu: "0.5"
+                requests:
+                  memory: "512Mi"
+                  cpu: "0.5"
+    volumeClaimTemplates:
+      - name: data-volume-template
+        spec:
+          storageClassName:  kubevirt-hostpath-provisioner
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 1Gi
+      - name: log-volume-template
+        spec:
+          storageClassName:  kubevirt-hostpath-provisioner
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 100Mi
+```
+
+## Deploy a DistributedMergeTree Cluster
+
+You can tell operator to configure your ClickHouse, as shown in the example below ([link to the manifest][config/samples/06-daisy-cluster-00.yaml]):
+
+1. Before you start, you should have an external kafka cluster.
+1. 'clusterType' should be 'DistributedMergeTree'
+1. Pod template: with cpu, mem quota, image of Daisy specified: registry.foundary.zone:8360/dae-dev/daisy-server:1.2.0
+1. VolumeClaim template
+1. add three usesrs 'test', 'readonly' and 'admin'
+1. change daisy settings, add a dictionary
+1. create a daisy cluster with 2 shards, 2 replicas with external kafka used
+
+```yaml
+apiVersion: "daisy.com/v1"
+kind: "DaisyInstallation"
+metadata:
+  name: "simple01"
+spec:
+  # clusterType is critical. For traditional cluster, it should be empty or not set. For DistributedMergeTree cluster, it should be "DistributedMergeTree"
+  clusterType: "DistributedMergeTree"
+  defaults:
+    templates:
+      podTemplate: pod-template
+      dataVolumeClaimTemplate: data-volume-template
+      logVolumeClaimTemplate: log-volume-template
+  pvReclaimPolicy: Retain
+  configuration:
+    # external kafka cluster, you can add multiple brokers   
+    kafka:
+      nodes:
+        - host: tob44.bigdata.lycc.qihoo.net
+          port: 9092
+    settings:
+      listen_host: "0.0.0.0"
     clusters:
       cluster:
         name: cluster

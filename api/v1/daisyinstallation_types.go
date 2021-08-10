@@ -55,6 +55,9 @@ type DaisyInstallationSpec struct {
 	// Specify a Service Account
 	ServiceAccount string `json:"serviceAccount,omitempty"`
 
+	// Specify the type of cluster
+	ClusterType string `json:"clusterType,omitempty"              yaml:"clusterType"`
+
 	// Configuration include most settings of the installation
 	Configuration Configuration `json:"configuration"`
 
@@ -132,6 +135,7 @@ type VolumeClaimTemplate struct {
 // Configuration defines configuration section of .spec
 type Configuration struct {
 	Zookeeper ZookeeperConfig `json:"zookeeper,omitempty" yaml:"zookeeper"`
+	Kafka     KafkaConfig     `json:"kafka,omitempty" yaml:"kafka"`
 	Users     Settings        `json:"users,omitempty"     yaml:"users"`
 	Profiles  Settings        `json:"profiles,omitempty"  yaml:"profiles"`
 	Quotas    Settings        `json:"quotas,omitempty"    yaml:"quotas"`
@@ -149,11 +153,13 @@ type Layout struct {
 	Shards            map[string]Shard `json:"shards,omitempty"`
 	ShardsSpecified   bool             `json:"-"`
 	ReplicasSpecified bool             `json:"-"`
+	Master            string           `json:"=,omitempty"`
 }
 
 // Cluster defines item of a clusters section of .configuration
 type Cluster struct {
 	Name      string          `json:"name"`
+	Kafka     KafkaConfig     `json:"kafka,omitempty"`
 	Zookeeper ZookeeperConfig `json:"zookeeper,omitempty"`
 	Settings  Settings        `json:"settings,omitempty"`
 	Files     Settings        `json:"files,omitempty"`
@@ -175,6 +181,7 @@ type Replica struct {
 	// store id is also uint64, due to the same reason as pd id, we store id as string
 	ID        string        `json:"id"`
 	Name      string        `json:"name"`
+	Role      string        `json:"role,omitempty"`
 	Image     string        `json:"image,omitempty"`
 	Config    ReplicaConfig `json:"-"`
 	Settings  Settings      `json:"settings,omitempty"`
@@ -313,6 +320,13 @@ type ZookeeperConfig struct {
 type ZookeeperNode struct {
 	Host string `json:"host,omitempty" yaml:"host"`
 	Port int32  `json:"port,omitempty" yaml:"port"`
+}
+
+// KafaConfig defines kafka section of .spec.configuration
+// Refers to
+// https://clickhouse.yandex/docs/en/single/index.html?#server-settings_zookeeper
+type KafkaConfig struct {
+	Nodes []ZookeeperNode `json:"nodes,omitempty"                yaml:"nodes"`
 }
 
 // +kubebuilder:object:root=true

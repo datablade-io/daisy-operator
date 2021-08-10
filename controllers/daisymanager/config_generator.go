@@ -17,6 +17,8 @@ package daisymanager
 import (
 	"bytes"
 	"fmt"
+	"strings"
+
 	"github.com/daisy/daisy-operator/api/v1"
 	"github.com/daisy/daisy-operator/pkg/util"
 	xmlbuilder "github.com/daisy/daisy-operator/pkg/util/xml"
@@ -140,6 +142,106 @@ func (c *ConfigGenerator) GetHostZookeeper(ctx *memberContext, di *v1.DaisyInsta
 	////		</distributed_ddl>
 	//// </yandex>
 	//util.Iline(b, 4, "</distributed_ddl>")
+	util.Iline(b, 0, "</"+xmlTagYandex+">")
+
+	return b.String()
+}
+
+// GetHostKafka creates data for "kafka.xml"
+func (c *ConfigGenerator) GetHostKafka(ctx *memberContext, di *v1.DaisyInstallation, r *v1.Replica) string {
+	cluster := ctx.Clusters[ctx.CurCluster]
+	kafka := &cluster.Kafka
+
+	if kafka.IsEmpty() {
+		// No Zookeeper nodes provided
+		return ""
+	}
+
+	b := &bytes.Buffer{}
+
+	// <yandex>
+	//		<cluster_settings>
+	util.Iline(b, 0, "<"+xmlTagYandex+">")
+	util.Iline(b, 4, "<cluster_settings>")
+
+	// <streaming_storage> settings
+	util.Iline(b, 8, "<streaming_storage>")
+	util.Iline(b, 12, "<kafka>")
+
+	util.Iline(b, 16, "<default>true</default>")
+	util.Iline(b, 16, "<cluster_name>%s</cluster_name>", cluster.Name)
+	util.Iline(b, 16, "<cluster_id>%s</cluster_id>", cluster.Name)
+	util.Iline(b, 16, "<security_protocol>PLAINTEXT</security_protocol>")
+	util.Iline(b, 16, "<replication_factor>2</replication_factor>")
+	// Append Kafka brokers
+	var nodes []string
+	for i := range kafka.Nodes {
+		node := &kafka.Nodes[i]
+		nodes = append(nodes, fmt.Sprintf("%s:%d", node.Host, node.Port))
+	}
+	util.Iline(b, 16, "<brokers>%s</brokers>", strings.Join(nodes, ","))
+
+	util.Iline(b, 16, "<topic_metadata_refresh_interval_ms>300000</topic_metadata_refresh_interval_ms>")
+	util.Iline(b, 16, "<message_max_bytes>1000000</message_max_bytes>")
+	util.Iline(b, 16, "<statistic_internal_ms>30000</statistic_internal_ms>")
+	util.Iline(b, 16, "<debug></debug>")
+
+	util.Iline(b, 16, "<enable_idempotence>true</enable_idempotence>")
+	util.Iline(b, 16, "<queue_buffering_max_messages>100000</queue_buffering_max_messages>")
+	util.Iline(b, 16, "<queue_buffering_max_kbytes>1048576</queue_buffering_max_kbytes>")
+	util.Iline(b, 16, "<queue_buffering_max_ms>5</queue_buffering_max_ms>")
+	util.Iline(b, 16, "<message_send_max_retries>2</message_send_max_retries>")
+	util.Iline(b, 16, "<retry_backoff_ms>100</retry_backoff_ms>")
+	util.Iline(b, 16, "<compression_codec>snappy</compression_codec>")
+
+	util.Iline(b, 16, "<message_timeout_ms>40000</message_timeout_ms>")
+	util.Iline(b, 16, "<message_delivery_async_poll_ms>100</message_delivery_async_poll_ms>")
+	util.Iline(b, 16, "<message_delivery_sync_poll_ms>10</message_delivery_sync_poll_ms>")
+
+	util.Iline(b, 16, "<group_id>daisy</group_id>")
+	util.Iline(b, 16, "<message_max_bytes>1000000</message_max_bytes>")
+	util.Iline(b, 16, "<enable_auto_commit>true</enable_auto_commit>")
+	util.Iline(b, 16, "<check_crcs>false</check_crcs>")
+	util.Iline(b, 16, "<auto_commit_interval_ms>5000</auto_commit_interval_ms>")
+	util.Iline(b, 16, "<fetch_message_max_bytes>1048576</fetch_message_max_bytes>")
+
+	util.Iline(b, 16, "<queued_min_messages>1000000</queued_min_messages>")
+	util.Iline(b, 16, "<queued_max_messages_kbytes>65536</queued_max_messages_kbytes>")
+	util.Iline(b, 16, "<internal_pool_size>2</internal_pool_size>")
+
+	util.Iline(b, 12, "</kafka>")
+	util.Iline(b, 8, "</streaming_storage>")
+
+	// <system_ddls> settings
+	util.Iline(b, 8, "<system_ddls>")
+	util.Iline(b, 12, "<name>__system_ddls</name>")
+	util.Iline(b, 12, "<replication_factor>1</replication_factor>")
+	util.Iline(b, 12, "<data_retention>168</data_retention>")
+	util.Iline(b, 8, "</system_ddls>")
+
+	// <system_catalogs> settings
+	util.Iline(b, 8, "<system_catalogs>")
+	util.Iline(b, 12, "<name>__system_catalogs</name>")
+	util.Iline(b, 12, "<replication_factor>1</replication_factor>")
+	//util.Iline(b, 12, "<client_side_compression>false</client_side_compression>")
+	util.Iline(b, 8, "</system_catalogs>")
+
+	// <system_node_metrics> settings
+	util.Iline(b, 8, "<system_node_metrics>")
+	util.Iline(b, 12, "<name>__system_node_metrics</name>")
+	util.Iline(b, 12, "<replication_factor>1</replication_factor>")
+	util.Iline(b, 8, "</system_node_metrics>")
+
+	// <system_tasks> settings
+	util.Iline(b, 8, "<system_tasks>")
+	util.Iline(b, 12, "<name>__system_tasks</name>")
+	util.Iline(b, 12, "<replication_factor>1</replication_factor>")
+	util.Iline(b, 12, "<data_retention>24</data_retention>")
+	util.Iline(b, 8, "</system_tasks>")
+
+	//		</cluster_settings>
+	// </yandex>
+	util.Iline(b, 4, "</cluster_settings>")
 	util.Iline(b, 0, "</"+xmlTagYandex+">")
 
 	return b.String()
@@ -285,6 +387,36 @@ func (c *ConfigGenerator) GetHostMacros(ctx *memberContext, r *v1.Replica) strin
 	// 		</macros>
 	// </yandex>
 	util.Iline(b, 0, "    </macros>")
+	util.Iline(b, 0, "</"+xmlTagYandex+">")
+
+	return b.String()
+}
+
+func (c *ConfigGenerator) GetNodeRoles(ctx *memberContext, r *v1.Replica) string {
+	b := &bytes.Buffer{}
+
+	// <yandex>
+	//     <macros>
+	util.Iline(b, 0, "<"+xmlTagYandex+">")
+	util.Iline(b, 4, "<cluster_settings>")
+
+	// <node_identity></node_identity> macro
+	util.Iline(b, 8, "<node_identity>%s</node_identity>", r.Name)
+
+	util.Iline(b, 8, "<node_roles>")
+	if r.Role == "master" {
+		util.Iline(b, 12, "<role>ddl</role>")
+		util.Iline(b, 12, "<role>catalog</role>")
+		util.Iline(b, 12, "<role>placement</role>")
+		util.Iline(b, 12, "<role>task</role>")
+	} else {
+		util.Iline(b, 12, "<role>catalog</role>")
+	}
+	util.Iline(b, 8, "</node_roles>")
+
+	// 		</cluster_settings>
+	// </yandex>
+	util.Iline(b, 4, "</cluster_settings>")
 	util.Iline(b, 0, "</"+xmlTagYandex+">")
 
 	return b.String()

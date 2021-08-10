@@ -13,7 +13,7 @@ make generate manifests
 debug parameter: 
 ```
 #GO Envrionment: GODEBUG=x509ignoreCN=0
---config=config/config.yaml --zap-log-level=2
+--config=config/config.yaml --zap-log-level= --cert-dir=/tmp/k8s-webhook-server/serving-certs
 ```
 
 ## Build
