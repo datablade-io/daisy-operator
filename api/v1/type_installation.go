@@ -194,6 +194,13 @@ func (cluster *Cluster) InheritZookeeperFrom(di *DaisyInstallation) {
 	}
 }
 
+//TODO: kafka is a installation wide settings, should be in cluster wide
+func (cluster *Cluster) InheritKafkaFrom(di *DaisyInstallation) {
+	if cluster.Kafka.IsEmpty() {
+		(&cluster.Kafka).MergeFrom(&di.Spec.Configuration.Kafka, MergeTypeFillEmptyValues)
+	}
+}
+
 func (cluster *Cluster) InheritSettingsFrom(di *DaisyInstallation) {
 	(&cluster.Settings).MergeFrom(di.Spec.Configuration.Settings)
 }
@@ -208,6 +215,42 @@ func (cluster *Cluster) InheritFilesFrom(di *DaisyInstallation) {
 
 		return false
 	})
+}
+
+func (kc *KafkaConfig) IsEmpty() bool {
+	return len(kc.Nodes) == 0
+}
+
+func (kc *KafkaConfig) MergeFrom(from *KafkaConfig, _type MergeType) {
+	if from == nil {
+		return
+	}
+
+	if !from.IsEmpty() {
+		// Append Nodes from `from`
+		if kc.Nodes == nil {
+			kc.Nodes = make([]ZookeeperNode, 0)
+		}
+		for fromIndex := range from.Nodes {
+			fromNode := &from.Nodes[fromIndex]
+
+			// Try to find equal entry
+			equalFound := false
+			for toIndex := range kc.Nodes {
+				toNode := &kc.Nodes[toIndex]
+				if toNode.Equal(fromNode) {
+					// Received already have such a node
+					equalFound = true
+					break
+				}
+			}
+
+			if !equalFound {
+				// Append Node from `from`
+				kc.Nodes = append(kc.Nodes, *fromNode.DeepCopy())
+			}
+		}
+	}
 }
 
 func (zkc *ZookeeperConfig) IsEmpty() bool {
@@ -489,6 +532,7 @@ func (spec *DaisyInstallationSpec) MergeFrom(from *DaisyInstallationSpec, _type 
 		spec.Paused = from.Paused
 	}
 
+	spec.ClusterType = from.ClusterType
 	(&spec.Defaults).MergeFrom(&from.Defaults, _type)
 	(&spec.Configuration).MergeFrom(&from.Configuration, _type)
 	(&spec.Templates).MergeFrom(&from.Templates, _type)
@@ -525,6 +569,7 @@ func (configuration *Configuration) MergeFrom(from *Configuration, _type MergeTy
 	}
 
 	(&configuration.Zookeeper).MergeFrom(&from.Zookeeper, _type)
+	(&configuration.Kafka).MergeFrom(&from.Kafka, _type)
 	(&configuration.Users).MergeFrom(from.Users)
 	(&configuration.Profiles).MergeFrom(from.Profiles)
 	(&configuration.Quotas).MergeFrom(from.Quotas)

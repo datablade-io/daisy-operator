@@ -71,6 +71,9 @@ spec:
                 description: Base annotations of TiDB cluster Pods, components may
                   add or override selectors upon this respectively
                 type: object
+              clusterType:
+                description: Specify the type of cluster
+                type: string
               configuration:
                 description: Configuration include most settings of the installation
                 properties:
@@ -85,9 +88,28 @@ spec:
                             type: object
                           description: Settings
                           type: object
+                        kafka:
+                          description: KafaConfig defines kafka section of .spec.configuration
+                            Refers to https://clickhouse.yandex/docs/en/single/index.html?#server-settings_zookeeper
+                          properties:
+                            nodes:
+                              items:
+                                description: ZookeeperNode defines item of nodes section
+                                  of .spec.configuration.zookeeper
+                                properties:
+                                  host:
+                                    type: string
+                                  port:
+                                    format: int32
+                                    type: integer
+                                type: object
+                              type: array
+                          type: object
                         layout:
                           description: Layout defines layout section of .spec.configuration.clusters
                           properties:
+                            =:
+                              type: string
                             replicasCount:
                               type: integer
                             shards:
@@ -127,6 +149,8 @@ spec:
                                         image:
                                           type: string
                                         name:
+                                          type: string
+                                        role:
                                           type: string
                                         settings:
                                           additionalProperties:
@@ -215,6 +239,23 @@ spec:
                         a sting or a VectorValue of strings
                       type: object
                     description: Settings
+                    type: object
+                  kafka:
+                    description: KafaConfig defines kafka section of .spec.configuration
+                      Refers to https://clickhouse.yandex/docs/en/single/index.html?#server-settings_zookeeper
+                    properties:
+                      nodes:
+                        items:
+                          description: ZookeeperNode defines item of nodes section
+                            of .spec.configuration.zookeeper
+                          properties:
+                            host:
+                              type: string
+                            port:
+                              format: int32
+                              type: integer
+                          type: object
+                        type: array
                     type: object
                   profiles:
                     additionalProperties:
@@ -7597,6 +7638,9 @@ spec:
                     description: Base annotations of TiDB cluster Pods, components
                       may add or override selectors upon this respectively
                     type: object
+                  clusterType:
+                    description: Specify the type of cluster
+                    type: string
                   configuration:
                     description: Configuration include most settings of the installation
                     properties:
@@ -7612,9 +7656,28 @@ spec:
                                 type: object
                               description: Settings
                               type: object
+                            kafka:
+                              description: KafaConfig defines kafka section of .spec.configuration
+                                Refers to https://clickhouse.yandex/docs/en/single/index.html?#server-settings_zookeeper
+                              properties:
+                                nodes:
+                                  items:
+                                    description: ZookeeperNode defines item of nodes
+                                      section of .spec.configuration.zookeeper
+                                    properties:
+                                      host:
+                                        type: string
+                                      port:
+                                        format: int32
+                                        type: integer
+                                    type: object
+                                  type: array
+                              type: object
                             layout:
                               description: Layout defines layout section of .spec.configuration.clusters
                               properties:
+                                =:
+                                  type: string
                                 replicasCount:
                                   type: integer
                                 shards:
@@ -7654,6 +7717,8 @@ spec:
                                             image:
                                               type: string
                                             name:
+                                              type: string
+                                            role:
                                               type: string
                                             settings:
                                               additionalProperties:
@@ -7742,6 +7807,23 @@ spec:
                             be either a sting or a VectorValue of strings
                           type: object
                         description: Settings
+                        type: object
+                      kafka:
+                        description: KafaConfig defines kafka section of .spec.configuration
+                          Refers to https://clickhouse.yandex/docs/en/single/index.html?#server-settings_zookeeper
+                        properties:
+                          nodes:
+                            items:
+                              description: ZookeeperNode defines item of nodes section
+                                of .spec.configuration.zookeeper
+                              properties:
+                                host:
+                                  type: string
+                                port:
+                                  format: int32
+                                  type: integer
+                              type: object
+                            type: array
                         type: object
                       profiles:
                         additionalProperties:

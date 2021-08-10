@@ -1,0 +1,59 @@
+apiVersion: "daisy.com/v1"
+kind: "DaisyInstallation"
+metadata:
+  name: "simple01"
+spec:
+  clusterType: "DistributedMergeTree"
+  defaults:
+    templates:
+      podTemplate: pod-template
+      dataVolumeClaimTemplate: data-volume-template
+      logVolumeClaimTemplate: log-volume-template
+  pvReclaimPolicy: Retain
+  configuration:
+    kafka:
+      nodes:
+        - host: tob44.bigdata.lycc.qihoo.net
+          port: 9092
+    settings:
+      listen_host: "0.0.0.0"
+    clusters:
+      cluster:
+        name: cluster
+        layout:
+          shardsCount: 2
+          replicasCount: 2
+  templates:
+    podTemplates:
+      - name: pod-template
+        metadata:
+          name: "simple01"
+        spec:
+          containers:
+            - name: clickhouse
+              imagePullPolicy: Always
+              image: registry.foundary.zone:8360/dae-dev/daisy-server:1.2.0
+              resources:
+                limits:
+                  memory: "512Mi"
+                  cpu: "0.5"
+                requests:
+                  memory: "512Mi"
+                  cpu: "0.5"
+    volumeClaimTemplates:
+      - name: data-volume-template
+        spec:
+          storageClassName:  kubevirt-hostpath-provisioner
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 1Gi
+      - name: log-volume-template
+        spec:
+          storageClassName:  kubevirt-hostpath-provisioner
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 100Mi

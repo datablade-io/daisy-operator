@@ -155,6 +155,12 @@ func newTestInstallation(shardNum int, replicaNum int) *v1.DaisyInstallation {
 	}
 }
 
+func newDaisyInstallation(shardNum int, replicaNum int) *v1.DaisyInstallation {
+	di := addKafka(newTestInstallation(shardNum, replicaNum))
+	di.Spec.ClusterType = "DistributedMergeTree"
+	return di
+}
+
 func addTemplates(di *v1.DaisyInstallation) *v1.DaisyInstallation {
 	di.Spec.Templates = v1.Templates{
 		PodTemplates: []v1.DaisyPodTemplate{
@@ -169,6 +175,7 @@ func addTemplates(di *v1.DaisyInstallation) *v1.DaisyInstallation {
 	}
 	return di
 }
+
 func addSettings(di *v1.DaisyInstallation) *v1.DaisyInstallation {
 	di.Spec.Configuration.Zookeeper.MergeFrom(&v1.ZookeeperConfig{
 		Nodes: []v1.ZookeeperNode{
@@ -272,4 +279,16 @@ func withStorageReq(claim corev1.PersistentVolumeClaim, size string) corev1.Pers
 func withVolumeExpansion(sc storagev1.StorageClass) *storagev1.StorageClass {
 	sc.AllowVolumeExpansion = pointer.BoolPtr(true)
 	return &sc
+}
+
+func addKafka(di *v1.DaisyInstallation) *v1.DaisyInstallation {
+	di.Spec.Configuration.Kafka.MergeFrom(&v1.KafkaConfig{
+		Nodes: []v1.ZookeeperNode{
+			{
+				Host: "kafka.svc.cluster.local",
+				Port: 9092,
+			},
+		},
+	}, v1.MergeTypeOverrideByNonEmptyValues)
+	return di
 }

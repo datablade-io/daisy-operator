@@ -141,6 +141,37 @@ func TestDaisyMemberManager_Sync(t *testing.T) {
 				})
 			},
 		},
+		{
+			name: "daisy cluster",
+			args: args{
+				di: newDaisyInstallation(2, 2),
+			},
+			verify: func(cli client.Client, di *v1.DaisyInstallation, g *GomegaWithT) {
+				c := newChecker(di, g)
+				c.checkConfigMapCount(cli, 6)
+				c.checkConfigMap(cli, "di-test-installation-deploy-confd-test-installation-cluster-0-0",
+					"daisy-generated-macros.xml", []string{
+						"<node_identity>test-installation-cluster-0-0</node_identity>",
+						"<role>ddl</role>",
+						"<role>catalog</role>",
+						"<role>placement</role>",
+						"<role>task</role>"})
+				c.checkConfigMap(cli, "di-test-installation-deploy-confd-test-installation-cluster-0-0",
+					"daisy-generated-zookeeper.xml", []string{
+						"<cluster_name>cluster</cluster_name>",
+						"<cluster_id>cluster</cluster_id>",
+						"<brokers>kafka.svc.cluster.local:9092</brokers>"})
+				c.checkConfigMap(cli, "di-test-installation-deploy-confd-test-installation-cluster-1-1",
+					"daisy-generated-macros.xml", []string{
+						"<node_identity>test-installation-cluster-1-1</node_identity>",
+						"<role>catalog</role>"})
+				c.checkConfigMap(cli, "di-test-installation-deploy-confd-test-installation-cluster-1-1",
+					"daisy-generated-zookeeper.xml", []string{
+						"<cluster_name>cluster</cluster_name>",
+						"<cluster_id>cluster</cluster_id>",
+						"<brokers>kafka.svc.cluster.local:9092</brokers>"})
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
