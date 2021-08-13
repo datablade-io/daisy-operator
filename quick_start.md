@@ -328,7 +328,7 @@ You can tell operator to configure your ClickHouse, as shown in the example belo
 
 1. Before you start, you should have an external kafka cluster.
 1. 'clusterType' should be 'DistributedMergeTree'
-1. Pod template: with cpu, mem quota, image of Daisy specified: registry.foundary.zone:8360/dae-dev/daisy-server:1.2.0
+1. Pod template: with cpu, mem quota, image of Daisy specified: registry.foundary.zone:8360/dae-dev/daisy-server:dev-k8s
 1. VolumeClaim template
 1. add three usesrs 'test', 'readonly' and 'admin'
 1. change daisy settings, add a dictionary
@@ -338,9 +338,8 @@ You can tell operator to configure your ClickHouse, as shown in the example belo
 apiVersion: "daisy.com/v1"
 kind: "DaisyInstallation"
 metadata:
-  name: "simple01"
+  name: "simple06"
 spec:
-  # clusterType is critical. For traditional cluster, it should be empty or not set. For DistributedMergeTree cluster, it should be "DistributedMergeTree"
   clusterType: "DistributedMergeTree"
   defaults:
     templates:
@@ -349,7 +348,6 @@ spec:
       logVolumeClaimTemplate: log-volume-template
   pvReclaimPolicy: Retain
   configuration:
-    # external kafka cluster, you can add multiple brokers   
     kafka:
       nodes:
         - host: tob44.bigdata.lycc.qihoo.net
@@ -371,7 +369,7 @@ spec:
           containers:
             - name: clickhouse
               imagePullPolicy: Always
-              image: registry.foundary.zone:8360/dae-dev/daisy-server:1.2.0
+              image: registry.foundary.zone:8360/dae-dev/daisy-server:dev-k8s
               resources:
                 limits:
                   memory: "512Mi"
@@ -379,6 +377,36 @@ spec:
                 requests:
                   memory: "512Mi"
                   cpu: "0.5"
+              ports:
+                - containerPort: 8123
+                  name: http
+                  protocol: TCP
+                - containerPort: 9000
+                  name: tcp
+                  protocol: TCP
+                - containerPort: 9009
+                  name: interserver
+                  protocol: TCP
+              livenessProbe:
+                failureThreshold: 3
+                httpGet:
+                  path: /ping
+                  port: 8123
+                  scheme: HTTP
+                initialDelaySeconds: 10
+                periodSeconds: 10
+                successThreshold: 1
+                timeoutSeconds: 1
+              readinessProbe:
+                failureThreshold: 3
+                httpGet:
+                  path: /ping
+                  port: 8123
+                  scheme: HTTP
+                initialDelaySeconds: 12
+                periodSeconds: 10
+                successThreshold: 1
+                timeoutSeconds: 1
     volumeClaimTemplates:
       - name: data-volume-template
         spec:

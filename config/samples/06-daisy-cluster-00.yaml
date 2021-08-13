@@ -1,7 +1,7 @@
 apiVersion: "daisy.com/v1"
 kind: "DaisyInstallation"
 metadata:
-  name: "simple01"
+  name: "simple06"
 spec:
   clusterType: "DistributedMergeTree"
   defaults:
@@ -32,7 +32,7 @@ spec:
           containers:
             - name: clickhouse
               imagePullPolicy: Always
-              image: registry.foundary.zone:8360/dae-dev/daisy-server:1.2.0
+              image: registry.foundary.zone:8360/dae-dev/daisy-server:dev-k8s
               resources:
                 limits:
                   memory: "512Mi"
@@ -40,6 +40,36 @@ spec:
                 requests:
                   memory: "512Mi"
                   cpu: "0.5"
+              ports:
+                - containerPort: 8123
+                  name: http
+                  protocol: TCP
+                - containerPort: 9000
+                  name: tcp
+                  protocol: TCP
+                - containerPort: 9009
+                  name: interserver
+                  protocol: TCP
+              livenessProbe:
+                failureThreshold: 3
+                httpGet:
+                  path: /ping
+                  port: 8123
+                  scheme: HTTP
+                initialDelaySeconds: 10
+                periodSeconds: 10
+                successThreshold: 1
+                timeoutSeconds: 1
+              readinessProbe:
+                failureThreshold: 3
+                httpGet:
+                  path: /ping
+                  port: 8123
+                  scheme: HTTP
+                initialDelaySeconds: 12
+                periodSeconds: 10
+                successThreshold: 1
+                timeoutSeconds: 1
     volumeClaimTemplates:
       - name: data-volume-template
         spec:

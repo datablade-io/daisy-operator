@@ -1,8 +1,12 @@
 apiVersion: "daisy.com/v1"
 kind: "DaisyInstallation"
 metadata:
-  name: "simple01"
+  name: "simple02"
 spec:
+  defaults:
+    templates:
+      dataVolumeClaimTemplate: data-volume-template
+      logVolumeClaimTemplate: log-volume-template
   pvReclaimPolicy: Retain
   configuration:
     zookeeper:
@@ -26,3 +30,21 @@ spec:
         layout:
           shardsCount: 2
           replicasCount: 2
+  templates:
+    volumeClaimTemplates:
+      - name: data-volume-template
+        spec:
+          storageClassName:  kubevirt-hostpath-provisioner
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 1Gi
+      - name: log-volume-template
+        spec:
+          storageClassName:  kubevirt-hostpath-provisioner
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 100Mi
