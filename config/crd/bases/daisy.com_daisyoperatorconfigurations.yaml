@@ -80,6 +80,9 @@ spec:
                 description: Path where to look for ClickHouseInstallation templates
                   .yaml files
                 type: string
+              imagebusybox:
+                description: Image of BusyBox
+                type: string
               log_backtrace_at:
                 type: string
               logtostderr:
@@ -130,6 +133,7 @@ spec:
             - chUsername
             - chUsersConfigsPath
             - chiTemplatesPath
+            - imagebusybox
             - log_backtrace_at
             - logtostderr
             - onStatefulSetCreateFailureAction

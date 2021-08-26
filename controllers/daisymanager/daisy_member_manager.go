@@ -144,6 +144,7 @@ func (m *DaisyMemberManager) Sync(cur *v1.DaisyInstallation) error {
 		Installation: dcName,
 		Normalized:   *curNorm,
 		owner:        k8s.GetOwnerRef(cur),
+		Config:       m.cfgMgr.Config(),
 	}
 
 	fillStatus(ctx, cur)

@@ -328,7 +328,7 @@ func personalizeStatefulSetTemplate(ctx *memberContext, statefulSet *apps.Statef
 		if _, ok := ctx.GetVolumeClaimTemplate(replica.Templates.LogVolumeClaimTemplate); ok {
 			addContainer(&statefulSet.Spec.Template.Spec, corev1.Container{
 				Name:  ClickHouseLogContainerName,
-				Image: defaultBusyBoxDockerImage,
+				Image: ctx.Config.ImageBusyBox,
 				Command: []string{
 					"/bin/sh", "-c", "--",
 				},

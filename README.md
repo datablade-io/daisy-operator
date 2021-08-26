@@ -13,7 +13,7 @@ make generate manifests
 debug parameter: 
 ```
 #GO Envrionment: GODEBUG=x509ignoreCN=0
---config=config/config.yaml --zap-log-level= --cert-dir=/tmp/k8s-webhook-server/serving-certs
+--config=config/manager/controller_manager_config.yaml --zap-log-level=2 --cert-dir=/tmp/k8s-webhook-server/serving-certs
 ```
 
 ## Build
@@ -51,6 +51,12 @@ make install
 
 // deploy daisy operator
 make deploy IMG=registry.foundary.zone:8360/dae/daisy-operator:v0.2
+```
+
+### (Optional) Generate Single Yaml File
+Instead of using make as shown above, you can choose to generate a single yaml file and deploy operator by *kubectl* without the source code
+```
+make yaml OUT=all.yaml IMG=registry.foundary.zone:8360/dae/daisy-operator:v0.6
 ```
 
 ## Tests
