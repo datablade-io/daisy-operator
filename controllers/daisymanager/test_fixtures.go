@@ -292,3 +292,9 @@ func addKafka(di *v1.DaisyInstallation) *v1.DaisyInstallation {
 	}, v1.MergeTypeOverrideByNonEmptyValues)
 	return di
 }
+
+func addNodePorts(di *v1.DaisyInstallation) *v1.DaisyInstallation {
+	di.Spec.Configuration.HTTPPort = 32000
+	di.Spec.Configuration.TCPPort = 32001
+	return di
+}

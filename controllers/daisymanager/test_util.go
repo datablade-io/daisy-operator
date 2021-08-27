@@ -237,7 +237,7 @@ func newFakeDaisyMemberManager(initObjs ...runtime.Object) (dmm *DaisyMemberMana
 		Recorder: record.NewFakeRecorder(100),
 	}
 
-	var cfgPath = "../../config/manager/config/config.yaml"
+	var cfgPath = "../../config/manager/controller_manager_config.yaml"
 	if path, err := os.Getwd(); err == nil {
 		cfgPath = fmt.Sprintf("%s/%s", path, cfgPath)
 	}

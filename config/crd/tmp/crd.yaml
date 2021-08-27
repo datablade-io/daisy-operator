@@ -200,6 +200,10 @@ spec:
                     description: Settings
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
+                  httpPort:
+                    description: 'TODO: replace with service template in future'
+                    format: int32
+                    type: integer
                   kafka:
                     description: KafaConfig defines kafka section of .spec.configuration Refers to https://clickhouse.yandex/docs/en/single/index.html?#server-settings_zookeeper
                     properties:
@@ -227,6 +231,9 @@ spec:
                     description: Settings
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
+                  tcpPort:
+                    format: int32
+                    type: integer
                   users:
                     description: Settings
                     type: object
@@ -4619,6 +4626,10 @@ spec:
                         description: Settings
                         type: object
                         x-kubernetes-preserve-unknown-fields: true
+                      httpPort:
+                        description: 'TODO: replace with service template in future'
+                        format: int32
+                        type: integer
                       kafka:
                         description: KafaConfig defines kafka section of .spec.configuration Refers to https://clickhouse.yandex/docs/en/single/index.html?#server-settings_zookeeper
                         properties:
@@ -4646,6 +4657,9 @@ spec:
                         description: Settings
                         type: object
                         x-kubernetes-preserve-unknown-fields: true
+                      tcpPort:
+                        format: int32
+                        type: integer
                       users:
                         description: Settings
                         type: object

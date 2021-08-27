@@ -240,6 +240,10 @@ spec:
                       type: object
                     description: Settings
                     type: object
+                  httpPort:
+                    description: 'TODO: replace with service template in future'
+                    format: int32
+                    type: integer
                   kafka:
                     description: KafaConfig defines kafka section of .spec.configuration
                       Refers to https://clickhouse.yandex/docs/en/single/index.html?#server-settings_zookeeper
@@ -278,6 +282,9 @@ spec:
                       type: object
                     description: Settings
                     type: object
+                  tcpPort:
+                    format: int32
+                    type: integer
                   users:
                     additionalProperties:
                       description: Setting represents one settings, which can be either
@@ -7808,6 +7815,10 @@ spec:
                           type: object
                         description: Settings
                         type: object
+                      httpPort:
+                        description: 'TODO: replace with service template in future'
+                        format: int32
+                        type: integer
                       kafka:
                         description: KafaConfig defines kafka section of .spec.configuration
                           Refers to https://clickhouse.yandex/docs/en/single/index.html?#server-settings_zookeeper
@@ -7846,6 +7857,9 @@ spec:
                           type: object
                         description: Settings
                         type: object
+                      tcpPort:
+                        format: int32
+                        type: integer
                       users:
                         additionalProperties:
                           description: Setting represents one settings, which can

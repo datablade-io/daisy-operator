@@ -142,6 +142,10 @@ type Configuration struct {
 	Settings  Settings        `json:"settings,omitempty"  yaml:"settings"`
 	Files     Settings        `json:"files,omitempty"     yaml:"files"`
 
+	//TODO: replace with service template in future
+	HTTPPort int32 `json:"httpPort,omitempty"     yaml:"httpPort"`
+	TCPPort  int32 `json:"tcpPort,omitempty"     yaml:"tcpPort"`
+
 	Clusters map[string]Cluster `json:"clusters,omitempty"`
 }
 
