@@ -97,6 +97,9 @@ type DaisyOperatorConfigurationSpec struct {
 	// Max number of concurrent reconciles in progress
 	ReconcileThreadsNumber int `json:"reconcileThreadsNumber" yaml:"reconcileThreadsNumber"`
 
+	// Image of BusyBox
+	ImageBusyBox string `json:"imagebusybox" yaml:"imageBusyBox"`
+
 	//
 	// The end of DaisyOperatorConfigurationSpec
 	//

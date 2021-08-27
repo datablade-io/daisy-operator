@@ -103,9 +103,9 @@ deploy: manifests kustomize
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/default | kubectl create -f -
 
-yamla: manifests kustomize
+yaml: manifests kustomize
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	$(KUSTOMIZE) build config/default >abc
+	$(KUSTOMIZE) build config/default > ${OUT}
 # Copy webhook certs to local for debug
 copy-running-certs:
 	kubectl get secret webhook-server-cert -n daisy-operator-system -o json | sed 's/ca.crt/cacrt/; s/tls.crt/tlscrt/; s/tls.key/tlskey/' > secrets.json

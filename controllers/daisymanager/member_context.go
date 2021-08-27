@@ -20,6 +20,7 @@ type memberContext struct {
 	Clusters     map[string]v1.Cluster
 	Normalized   NormalizedSpec
 	owner        metav1.OwnerReference
+	Config       *v1.DaisyOperatorConfigurationSpec
 }
 
 func (ctx *memberContext) GetVolumeClaimTemplate(name string) (*v1.VolumeClaimTemplate, bool) {

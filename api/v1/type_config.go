@@ -74,6 +74,9 @@ const (
 
 	// Default number of system controller threads running concurrently (used in case no other specified in config)
 	DefaultReconcileSystemThreadsNumber = 1
+
+	// Default BusyBox docker image to be used
+	defaultBusyBoxDockerImage = "busybox"
 )
 
 const (
@@ -338,6 +341,10 @@ func (config *DaisyOperatorConfigurationSpec) normalize() {
 	if config.ReconcileThreadsNumber == 0 {
 		config.ReconcileThreadsNumber = defaultReconcileThreadsNumber
 	}
+
+	if config.ImageBusyBox == "" {
+		config.ImageBusyBox = defaultBusyBoxDockerImage
+	}
 }
 
 // applyEnvVarParams applies ENV VARS over config
@@ -474,6 +481,8 @@ func (config *DaisyOperatorConfigurationSpec) String(hideCredentials bool) strin
 	util.Fprintf(b, "Log_backtrace_at string: %s\n", config.Log_backtrace_at)
 
 	util.Fprintf(b, "ReconcileThreadsNumber: %d\n", config.ReconcileThreadsNumber)
+
+	util.Fprintf(b, "ImageBusyBox: %s\n", config.ImageBusyBox)
 
 	return b.String()
 }

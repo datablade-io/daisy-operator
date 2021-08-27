@@ -126,6 +126,8 @@ func TestDaisyMemberManager_Sync(t *testing.T) {
 					g.Expect(set.Spec.Template.Spec.Containers[0].Image).Should(Equal("daisy-image:latest"))
 					g.Expect(set.Spec.Template.Spec.Containers[0].Name).Should(Equal("daisy"))
 					g.Expect(len(set.Spec.Template.Spec.Containers)).To(Equal(2))
+					// define by 'imageBusyBox' in config.yaml
+					g.Expect(set.Spec.Template.Spec.Containers[1].Image).Should(Equal("busybox:latest"))
 					g.Expect(set.Spec.Template.Spec.Containers[0].VolumeMounts).Should(
 						ContainElements(
 							corev1.VolumeMount{

@@ -394,7 +394,7 @@ func TestDaisyMemberManager_syncServiceForInstallation(t *testing.T) {
 	}{
 		{
 			name:    "new service for installation",
-			di:      newTestInstallation(1, 1),
+			di:      addNodePorts(newTestInstallation(1, 1)),
 			wantErr: false,
 		},
 	}
@@ -413,6 +413,10 @@ func TestDaisyMemberManager_syncServiceForInstallation(t *testing.T) {
 			svc := corev1.Service{}
 			err := cli.Get(context.Background(), client.ObjectKey{Name: fmt.Sprintf("daisy-%s", tt.di.Name), Namespace: tt.di.Namespace}, &svc)
 			g.Expect(err).Should(BeNil())
+			g.Expect(svc.Spec.Ports[0].Name).Should(Equal("tcp"))
+			g.Expect(svc.Spec.Ports[0].NodePort).Should(Equal(int32(32001)))
+			g.Expect(svc.Spec.Ports[1].Name).Should(Equal("http"))
+			g.Expect(svc.Spec.Ports[1].NodePort).Should(Equal(int32(32000)))
 			c.checkOwnerRef(svc.OwnerReferences)
 		})
 	}

@@ -144,6 +144,7 @@ func (m *DaisyMemberManager) Sync(cur *v1.DaisyInstallation) error {
 		Installation: dcName,
 		Normalized:   *curNorm,
 		owner:        k8s.GetOwnerRef(cur),
+		Config:       m.cfgMgr.Config(),
 	}
 
 	fillStatus(ctx, cur)
@@ -431,6 +432,24 @@ func (m *DaisyMemberManager) getNewInstallationService(di *v1.DaisyInstallation)
 	// Incorrect/unknown .templates.ServiceTemplate specified
 	// Create default Service
 	svcLabel := label.New().Instance(di.GetInstanceName())
+	tcpPort := corev1.ServicePort{
+		Name:       daisyDefaultTCPPortName,
+		Protocol:   corev1.ProtocolTCP,
+		Port:       daisyDefaultTCPPortNumber,
+		TargetPort: intstr.FromString(daisyDefaultTCPPortName),
+	}
+	if di.Spec.Configuration.TCPPort > 0 {
+		tcpPort.NodePort = di.Spec.Configuration.TCPPort
+	}
+	httpPort := corev1.ServicePort{
+		Name:       daisyDefaultHTTPPortName,
+		Protocol:   corev1.ProtocolTCP,
+		Port:       daisyDefaultHTTPPortNumber,
+		TargetPort: intstr.FromString(daisyDefaultHTTPPortName),
+	}
+	if di.Spec.Configuration.HTTPPort > 0 {
+		httpPort.NodePort = di.Spec.Configuration.HTTPPort
+	}
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            serviceName,
@@ -441,18 +460,8 @@ func (m *DaisyMemberManager) getNewInstallationService(di *v1.DaisyInstallation)
 		Spec: corev1.ServiceSpec{
 			// ClusterIP: templateDefaultsServiceClusterIP,
 			Ports: []corev1.ServicePort{
-				{
-					Name:       daisyDefaultHTTPPortName,
-					Protocol:   corev1.ProtocolTCP,
-					Port:       daisyDefaultHTTPPortNumber,
-					TargetPort: intstr.FromInt(int(daisyDefaultHTTPPortNumber)),
-				},
-				{
-					Name:       daisyDefaultTCPPortName,
-					Protocol:   corev1.ProtocolTCP,
-					Port:       daisyDefaultTCPPortNumber,
-					TargetPort: intstr.FromInt(int(daisyDefaultTCPPortNumber)),
-				},
+				tcpPort,
+				httpPort,
 			},
 			Selector: svcLabel.Labels(),
 			Type:     corev1.ServiceTypeNodePort,
