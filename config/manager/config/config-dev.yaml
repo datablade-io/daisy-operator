@@ -1,3 +1,15 @@
+apiVersion: controller-runtime.sigs.k8s.io/v1alpha1
+kind: ControllerManagerConfig
+health:
+  healthProbeBindAddress: :8081
+metrics:
+  bindAddress: 127.0.0.1:8080
+webhook:
+  port: 9443
+leaderElection:
+  leaderElect: true
+  resourceName: 8a30d6a4.daisy.com
+
 ################################################
 ##
 ## Watch Namespaces Section
@@ -6,9 +18,9 @@
 
 # List of namespaces where clickhouse-operator watches for events.
 # Concurrently running operators should watch on different namespaces
-watchNamespaces:
-  - dev
-  - test
+#watchNamespaces:
+#  - dev
+#  - test
 #  - info
 #  - onemore
 
@@ -39,17 +51,17 @@ chiTemplatesPath: templates.d
 ################################################
 
 # How many seconds to wait for created/updated StatefulSet to be Ready
-statefulSetUpdateTimeout: 600
+statefulSetUpdateTimeout: 300
 
 # How many seconds to wait between checks for created/updated StatefulSet status
-statefulSetUpdatePollPeriod: 10
+statefulSetUpdatePollPeriod: 5
 
 # What to do in case created StatefulSet is not in Ready after `statefulSetUpdateTimeout` seconds
 # Possible options:
 # 1. abort - do nothing, just break the process and wait for admin
 # 2. delete - delete newly created problematic StatefulSet
 # 3. ignore - ignore error, pretend nothing happened and move on to the next StatefulSet
-onStatefulSetCreateFailureAction: delete
+onStatefulSetCreateFailureAction: ignore
 
 # What to do in case updated StatefulSet is not in Ready after `statefulSetUpdateTimeout` seconds
 # Possible options:
@@ -104,7 +116,7 @@ chPort: 8123
 
 logtostderr: "true"
 alsologtostderr: "false"
-v: "4"
+v: "1"
 stderrthreshold: ""
 vmodule: ""
 log_backtrace_at: ""
@@ -116,4 +128,7 @@ log_backtrace_at: ""
 ################################################
 
 # Max number of concurrent reconciles in progress
-reconcileThreadsNumber: 1
+reconcileThreadsNumber: 10
+
+# Image of BusyBox
+imageBusyBox: "busybox:latest"

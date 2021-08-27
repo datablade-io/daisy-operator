@@ -23,7 +23,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager 
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /
 COPY --from=builder /workspace/manager .
-COPY config/config.yaml ./config.yaml
+COPY config/manager/controller_manager_config.yaml ./config.yaml
 USER 65532:65532
 
 ENTRYPOINT ["/manager"]
